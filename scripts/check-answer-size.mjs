@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {withAnswerSizes,suggestsLongAnswer} from '../lib/answer-size.ts';
+import {makeParts,toStudentParts} from '../lib/exam-parts.ts';
+const prompt='WRITING\n\n5. Write an opinion essay. Write 100–120 words. Is learning a language useful?\n';
+const text=prompt+'Model response.';
+const parts=makeParts(text,[{id:'writing',start:prompt.length,end:text.length}]);assert.equal(parts[1].multiline,true);assert.equal(toStudentParts(parts)[1].multiline,true);
+const old=[{text:prompt},{id:'old',answer:'Reference.'}];assert.equal(toStudentParts(old)[1].multiline,true);assert.equal(JSON.stringify(toStudentParts(old)).includes('Reference.'),false);
+assert.equal(withAnswerSizes([{text:prompt},{id:'short',answer:'yes',multiline:false}])[1].multiline,false);assert.equal(toStudentParts([{text:prompt},{id:'short',answer:'yes',multiline:false}])[1].multiline,false);
+assert.equal(makeParts(text,[{id:'short',start:prompt.length,end:text.length,multiline:false}])[1].multiline,false);
+assert.equal(suggestsLongAnswer('Write 80-100 words about your holiday.'),true);
+assert.equal(suggestsLongAnswer('Write an email to a friend.'),true);
+assert.equal(suggestsLongAnswer('Complete with one word.','on'),false);
+const mixed=withAnswerSizes([{text:prompt},{id:'essay',answer:'Answer'},{text:'\n6 Complete with one word. She ____ to school.\n'},{id:'word',answer:'goes'}]);assert.equal(mixed[1].multiline,true);assert.equal(mixed[3].multiline,undefined);
+assert.equal(withAnswerSizes([{text:prompt},{id:'option',kind:'choice',answer:'A',options:['A','B']}])[1].multiline,undefined);
+console.log('PASS: writing manual y antiguo amplio; elección corta explícita respetada; huecos cortos y selecciones conservados.');

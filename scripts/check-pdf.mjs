@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {extractPageText,combinePages,repairSyntheticSpaces} from '../lib/pdf-text.ts';
+const item=(str,x,y,width=str.length*5,extra={})=>({str,transform:[10,0,0,10,x,y],width,height:10,hasEOL:true,...extra});
+const items=[item('Answer the questions.',45,800),item('Score:',400,700),item('5',20,800),item('What happened?',45,780),item('1',20,780),item('It worked.',45,760),item('',45,760,0,{height:0}),item(' ',45,780,200,{height:0})];
+const out=extractPageText(items);
+assert.equal(out,'5 Answer the questions.\n1 What happened?\nIt worked.\n\nScore:');
+assert.equal(extractPageText([...items].reverse()),out);
+assert.equal(extractPageText([item('According to most',20,800,80),item('sources',103,800,35),item(', it worked.',138,800,60)]),'According to most sources, it worked.');
+const prose='This is a long reading paragraph that should continue naturally on the next line';
+assert.equal(extractPageText([item(prose,20,800,480),item('without an artificial break.',20,784,160)]),prose+' without an artificial break.');
+assert.equal(extractPageText([item(prose,20,800,480),item('2 The next question.',20,784,160)]),prose+'\n2 The next question.');
+const artifact=[item('T he student has read the text and answered all of the questions.',10,800)];
+assert.equal(repairSyntheticSpaces(artifact,'The student has read the text and answered all of the questions.')[0].str,'The student has read the text and answered all of the questions.');
+assert.equal(repairSyntheticSpaces(artifact,'Not the same text.')[0].str,artifact[0].str);
+assert.equal(repairSyntheticSpaces(artifact,'Thestudenthasreadthetextandansweredallofthequestions.')[0].str,artifact[0].str);
+const combined=combinePages(['first page','second page']);assert.equal(combined.text.slice(combined.pages[1].start,combined.pages[1].end),'second page');
+console.log('PASS: synthetic data checks.');

@@ -1,0 +1,8 @@
+'use client';
+import {useState} from 'react';
+import {Clock,LockKeyhole,LockKeyholeOpen,Loader2} from 'lucide-react';
+export default function ExamManagement({exam,teacherId,onChange}:{exam:any;teacherId:string;onChange:(changes:any)=>void}){
+ const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ async function toggle(){setBusy(true);setError('');try{const r=await fetch('/api/exams',{method:'PATCH',headers:{'Content-Type':'application/json','X-Teacher-Account':teacherId},body:JSON.stringify({id:exam.id,accepting:!exam.accepting})});const data:any=await r.json();if(!r.ok)throw new Error(data.error);onChange(data);}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+ return <section className="exam-management"><div><h3>{exam.accepting?<LockKeyholeOpen size={18}/>:<LockKeyhole size={18}/>} {exam.accepting?'Entregas abiertas':'Examen cerrado'}</h3><p>{exam.accepting?'Al cerrar, se bloquean los nuevos intentos y las nuevas entregas. Las respuestas ya entregadas se conservan.':'Los alumnos no pueden iniciar ni enviar nuevas entregas. Podés corregir y publicar las devoluciones.'}</p><p><Clock size={14}/> {exam.duration_minutes?`${exam.duration_minutes} minutos por alumno desde que comienza.`:'Sin límite de tiempo.'}</p>{!exam.accepting&&<small>Al reabrir se retiran las devoluciones publicadas. Podrás volver a publicarlas cuando cierres el examen.</small>}</div><button className="secondary" disabled={busy} onClick={toggle}>{busy?<Loader2 size={16} className="spin"/>:exam.accepting?<LockKeyhole size={16}/>:<LockKeyholeOpen size={16}/>} {exam.accepting?'Cerrar entregas':'Reabrir examen'}</button>{error&&<p role="alert" className="correction-error">{error}</p>}</section>
+}

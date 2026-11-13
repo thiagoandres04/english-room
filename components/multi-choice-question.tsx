@@ -1,0 +1,8 @@
+'use client';
+import {selectedOptions,multiAnswerIsValid} from '../lib/multi-choice';
+import type {ExamPart} from '../lib/exam-parts';
+export default function MultiChoiceQuestion({part,value,onChange,teacher=false}:{part:ExamPart;value:string;onChange:(value:string)=>void;teacher?:boolean}){
+ const selected=selectedOptions(value);const complete=multiAnswerIsValid(part,value);
+ function toggle(option:string){const next=selected.includes(option)?selected.filter(v=>v!==option):[...selected,option];onChange(next.length?JSON.stringify(part.options!.filter(v=>next.includes(v))):'');}
+ return <fieldset className={'multi-choice-question '+(teacher?'teacher-choice':'')}><legend>{teacher?'Solución docente: ':''}{part.prompt}</legend><p className="multi-choice-instruction">{part.selectCount?`Marcá ${part.selectCount} opciones.`:'Marcá las opciones que correspondan.'} <span>{selected.length}{part.selectCount?' / '+part.selectCount:''} seleccionadas</span></p><div className="multi-choice-options">{part.options?.map(option=><label key={option} className={selected.includes(option)?'chosen':''}><input type="checkbox" checked={selected.includes(option)} disabled={!selected.includes(option)&&!!part.selectCount&&selected.length>=part.selectCount} onChange={()=>toggle(option)}/><span>{option}</span></label>)}</div>{teacher&&<small className={'choice-teacher-hint '+(!complete?'unconfigured':'')}>{complete?'Solución docente guardada. El alumno verá todas las casillas sin marcar.':selected.length?'Completá la cantidad de opciones pedida antes de guardar.':'Marcá las respuestas correctas del PDF. Podés dejar la solución pendiente para revisar después.'}</small>}</fieldset>
+}
