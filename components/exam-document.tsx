@@ -1,5 +1,6 @@
 'use client';
 import MultiChoiceQuestion from './multi-choice-question';
+import ExerciseText from './exercise-text';
 import {withAnswerSizes} from '../lib/answer-size';
 import {useRef,useState} from 'react';
 import ChoiceQuestion from './choice-question';
@@ -30,6 +31,6 @@ export default function ExamDocument({parts,answers,onChange,teacher=false}:{par
   if(p.kind==='choice')return <ChoiceQuestion key={p.id} part={p} teacher={teacher} value={value(p)} onChange={v=>onChange({...answers,[p.id!]:v})}/>;
   if(p.blank||p.answer!==undefined){if(teacher)return <label key={p.id} className="written-solution"><span>Solución docente {numbers.get(p.id!)}</span><textarea aria-label={'Solución '+numbers.get(p.id!)} maxLength={6000} value={value(p)} onChange={e=>onChange({...answers,[p.id!]:e.target.value})}/></label>;
    return p.multiline?<textarea key={p.id} className="long-answer" rows={9} aria-label={'Respuesta '+numbers.get(p.id!)} autoComplete="off" maxLength={6000} placeholder="Write your answer here…" value={value(p)} onChange={e=>onChange({...answers,[p.id!]:e.target.value})}/>:<input key={p.id} aria-label={'Respuesta '+numbers.get(p.id!)} autoComplete="off" maxLength={6000} placeholder="Your answer" value={value(p)} onChange={e=>onChange({...answers,[p.id!]:e.target.value})}/>;
-  }return p.text?<span key={i}>{p.text}</span>:null;
+  }return p.text?<ExerciseText key={i} text={p.text} atLineStart={i===0||['choice','multi-choice','wordbank'].includes(parts[i-1]?.kind||'')||/\n$/.test(parts[i-1]?.text||'')}/>:null;
  })}</>;
 }
