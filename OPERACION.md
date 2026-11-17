@@ -18,6 +18,14 @@ Guardar la corrección no la publica. Tras cerrar el examen, publicar la devoluc
 
 Publicar guarda una copia de la nota, devolución y respuestas. Editar la corrección privada no cambia esa copia hasta presionar Actualizar publicación. Retirar publicación oculta la devolución. Reabrir el examen retira todas sus publicaciones.
 
+## Eliminar exámenes antiguos
+
+En Mis exámenes se puede buscar por título, filtrar por año de creación y elegir Eliminar en cada examen propio. La confirmación consulta el número actual de entregas, correcciones y devoluciones publicadas, y advierte si hay intentos en curso.
+
+Solo se permite eliminar exámenes cerrados. Si siguen abiertos, el diálogo ofrece Cerrar entregas y revisar. Antes de confirmar se puede descargar un respaldo ZIP. Hay que escribir ELIMINAR y confirmar expresamente la eliminación definitiva.
+
+Se eliminan en una transacción el examen, sus entregas, correcciones, publicaciones, accesos personales e intentos guardados. Los enlaces anteriores dejan de funcionar. Se comprueban la propiedad del docente y la cantidad de entregas mostrada; si cambió, se pide actualizar la confirmación. Los archivos de audio se conservan para no afectar otros exámenes o borradores que los reutilicen. No hay papelera: para recuperar datos hace falta un respaldo previo.
+
 ## Exportaciones y respaldo
 
 Mis exámenes ofrece CSV compatible con Excel y un respaldo ZIP por cuenta. Los resultados de un examen ofrecen CSV, vista imprimible para guardar como PDF y ZIP de ese examen. Los datos se limitan a la cuenta docente autenticada.
@@ -32,6 +40,4 @@ Límites por ZIP: 100 exámenes, 300 entregas, 200 MB de archivo y 16 MB de dato
 
 ## Verificación
 
-`pnpm test` ejecuta pruebas con datos sintéticos de PDF, writing, audio, búsquedas, bancos de palabras y validación de IA simulada. No consume la API. `pnpm check` verifica TypeScript y `pnpm build` compila la aplicación.
-
-Este repositorio público no incluye archivos originales, credenciales ni fixtures privados de las pruebas de integración del colegio. Quedan pendientes la prueba piloto con docentes y alumnos y la validación de los formatos reales de cada institución.
+scripts/check-release-backup-timing.mjs ejecuta pruebas locales con cuentas ficticias: privacidad por cuenta, apertura/cierre, publicaciones con copia estable y enlaces revocables, CSV que neutraliza fórmulas, HTML escapado, ZIP con audio, restauración sin reemplazo, tiempo individual persistente y vencimiento real con respuestas parciales. No llama a la IA ni usa la base de producción.

@@ -16,6 +16,15 @@ export async function GET(req:Request) {
    const exam=await env.DB!.prepare('SELECT * FROM exams WHERE id=?').bind(id).first<any>();
    if(!exam)return json({error:'No encontramos este examen. Revisá el enlace.'},404);
    const parts=withAnswerSizes(JSON.parse(exam.body));
+   if(url.searchParams.get('view')==='delete'){
+    if(!owner)return teacherLoginRequired();if(owner!==exam.owner)return json({error:'No encontramos ese examen en tu cuenta.'},404);
+    const counts=await env.DB!.prepare(`SELECT
+     (SELECT COUNT(*) FROM submissions WHERE exam_id=?) AS deliveries,
+     (SELECT COUNT(*) FROM submission_reviews r JOIN submissions s ON s.id=r.submission_id WHERE s.exam_id=?) AS corrections,
+     (SELECT COUNT(*) FROM submission_publications p JOIN submissions s ON s.id=p.submission_id WHERE s.exam_id=?) AS publications,
+     (SELECT COUNT(*) FROM exam_attempts a WHERE a.exam_id=? AND a.deadline>? AND NOT EXISTS (SELECT 1 FROM submissions s WHERE s.id=a.id)) AS activeAttempts`).bind(id,id,id,id,Date.now()).first<any>();
+    return json({id:exam.id,title:exam.title,created:exam.created,accepting:!!exam.accepting,...counts});
+   }
    if(url.searchParams.get('view')==='teacher'){if(!owner)return teacherLoginRequired();if(owner!==exam.owner)return json({error:'No encontramos ese examen en tu cuenta.'},404);await finalizeExpiredAttempts(owner,id);const results=await env.DB!.prepare('SELECT s.id,s.name,s.course,s.answers,s.score,s.total,s.created,s.grading_status,s.feedback,s.grading_error,r.final_grade,r.feedback AS teacher_feedback,r.writing_feedback,r.updated AS review_updated,r.revision AS review_revision,p.published AS published_at,p.review_revision AS published_revision FROM submissions s LEFT JOIN submission_reviews r ON r.submission_id=s.id LEFT JOIN submission_publications p ON p.submission_id=s.id WHERE s.exam_id=? ORDER BY s.created DESC').bind(id).all();return json({...exam,owner:undefined,parts,body:undefined,audio_json:undefined,audio:JSON.parse(exam.audio_json||'[]'),results:results.results.map((r:any)=>({...r,review:reviewFromRow(r),publication:r.published_at?{published:r.published_at,revision:r.published_revision}:null,grading_status:r.review_revision!=null?'reviewed':parts.some(isWriting)&&r.grading_status==='graded'?'awaiting_teacher':r.grading_status}))});}
    let canRead=true;if(exam.duration_minutes){const attemptId=req.headers.get('X-Attempt-Id'),token=req.headers.get('Authorization')?.replace(/^Bearer /,'');canRead=!!(attemptId&&validStudentToken(token)&&await env.DB!.prepare('SELECT id FROM exam_attempts WHERE id=? AND exam_id=? AND token_hash=?').bind(attemptId,id,await tokenHash(token)).first());}
    return json({id:exam.id,title:exam.title,level:exam.level,accepting:!!exam.accepting,durationMinutes:exam.duration_minutes,instructions:exam.instructions,parts:canRead?toStudentParts(parts):[],audio:JSON.parse(exam.audio_json||'[]')});
@@ -56,4 +65,35 @@ export async function PATCH(req:Request){
   if(!commands.length)return json({error:'No hay cambios para guardar.'},400);
   await env.DB!.batch(commands);return json(result);
  }catch{return json({error:'No se pudieron actualizar los audios. Volvé a intentarlo.'},503);}
+}
+
+/** Delete only an owned, closed exam and its dependent records in one transaction. */
+export async function DELETE(req:Request){
+ try{
+  const account=await teacherIdentity(req);if(!account)return teacherLoginRequired();
+  const raw=await req.text();if(raw.length>2000)return json({error:'Solicitud inválida.'},400);
+  let data;try{data=JSON.parse(raw)}catch{return json({error:'Solicitud inválida.'},400)}
+  if(!data||typeof data.id!=='string'||data.id.length>100||data.confirmation!=='ELIMINAR'||!Number.isInteger(data.expectedDeliveries)||data.expectedDeliveries<0)return json({error:'Escribí ELIMINAR para confirmar y revisá las entregas del examen.'},400);
+  const owner=account.owner;
+  const exam=await env.DB!.prepare('SELECT id,accepting FROM exams WHERE id=? AND owner=?').bind(data.id,owner).first<any>();
+  if(!exam)return json({error:'No encontramos ese examen en tu cuenta.'},404);
+  if(exam.accepting!==0)return json({error:'Cerrá las entregas antes de eliminar el examen.',closeRequired:true},409);
+  // -1 is an internal claim visible only inside this atomic D1 batch. A successful
+  // batch removes the row; any failure rolls back its original closed state.
+  // The claim also checks the count shown in the confirmation before deleting.
+  const claimed='SELECT id FROM exams WHERE id=? AND owner=? AND accepting=-1';
+  const submitted=`SELECT id FROM submissions WHERE exam_id IN (${claimed})`;
+  const bind=[data.id,owner];
+  const results=await env.DB!.batch([
+   env.DB!.prepare('UPDATE exams SET accepting=-1 WHERE id=? AND owner=? AND accepting=0 AND (SELECT COUNT(*) FROM submissions WHERE exam_id=exams.id)=?').bind(...bind,data.expectedDeliveries),
+   env.DB!.prepare(`DELETE FROM submission_publications WHERE submission_id IN (${submitted})`).bind(...bind),
+   env.DB!.prepare(`DELETE FROM submission_access WHERE submission_id IN (${submitted})`).bind(...bind),
+   env.DB!.prepare(`DELETE FROM submission_reviews WHERE submission_id IN (${submitted})`).bind(...bind),
+   env.DB!.prepare(`DELETE FROM exam_attempts WHERE exam_id IN (${claimed})`).bind(...bind),
+   env.DB!.prepare(`DELETE FROM submissions WHERE exam_id IN (${claimed})`).bind(...bind),
+   env.DB!.prepare('DELETE FROM exams WHERE id=? AND owner=? AND accepting=-1').bind(...bind)
+  ]);
+  if(!results[results.length-1].meta.changes)return json({error:'El examen cambió desde que abriste la confirmación. Actualizá los datos y revisalos antes de borrar.'},409);
+  return json({deleted:true,id:data.id});
+ }catch{return json({error:'No se pudo eliminar el examen. No se aplicaron cambios; intentá de nuevo.'},503);}
 }

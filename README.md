@@ -117,3 +117,5 @@ Esta es una copia de código para presentación y revisión. No contiene la base
 `.openai/hosting.json` declara los nombres de los servicios locales y no está vinculado a la instancia de producción. Para alojar una copia propia hay que configurar sus servicios y secretos de manera independiente. El servidor requiere un runtime compatible con Workers; GitHub Pages por sí solo no ejecuta esta aplicación.
 
 Las dependencias conservan sus propias licencias. Este repositorio no incorpora una licencia de código abierto para el código de la aplicación.
+
+Los profesores pueden filtrar su biblioteca por año y eliminar sus propios exámenes cerrados, con confirmación y opción de respaldo previo. La eliminación incluye las entregas, correcciones y devoluciones vinculadas.

@@ -1,11 +1,12 @@
 'use client';
-import {useRef,useState} from 'react';
+import {useRef,useState,useEffect} from 'react';
 import {Download,Upload,Loader2,ShieldCheck} from 'lucide-react';
 import {zipSync,unzipSync,strToU8,strFromU8,type Zippable} from 'fflate';
 import {MAX_BACKUP_BYTES,validateBackup,type BackupData} from '../lib/backup-format';
 export function downloadFile(bytes:BlobPart,type:string,name:string){const url=URL.createObjectURL(new Blob([bytes],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
-export default function DataTools({examId,teacherId,onRestored}:{examId?:string;teacherId:string;onRestored?:()=>void}){
+export default function DataTools({examId,teacherId,onRestored,onBusyChange}:{examId?:string;teacherId:string;onRestored?:()=>void;onBusyChange?:(busy:boolean)=>void}){
  const [busy,setBusy]=useState('');const [message,setMessage]=useState('');const [error,setError]=useState('');const [restore,setRestore]=useState<{backup:BackupData;files:Record<string,Uint8Array>}|null>(null);const input=useRef<HTMLInputElement>(null);
+ useEffect(()=>{onBusyChange?.(!!busy)},[busy,onBusyChange]);
  const headers={'X-Teacher-Account':teacherId};
  async function response(url:string,options:RequestInit={}){const r=await fetch(url,{...options,headers:{...headers,...options.headers}});if(!r.ok){const e:any=await r.json();throw new Error(e.error||'No se pudo completar.')}return r;}
  async function exportCsv(){setBusy('csv');setError('');try{const r=await response('/api/export'+(examId?'?exam='+examId:''));downloadFile(await r.blob(),'text/csv;charset=utf-8','english-room-notas.csv');setMessage('Planilla descargada. Podés abrirla en Excel.');}catch(e:any){setError(e.message)}finally{setBusy('')}}
