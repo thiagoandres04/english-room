@@ -1,4 +1,5 @@
 import {extractPageText,type PositionedText} from './pdf-text.ts';
+import {stripPDFStudentHeader} from './pdf-student-header.ts';
 import type {ExerciseMark} from './exam-parts.ts';
 type Run=PositionedText&{fontName?:string};
 export type WordBankHint={start:number;end:number;options:string[];reusable:boolean;gaps:{start:number;end:number;answer:string}[]};
@@ -6,6 +7,7 @@ const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|use to)|Read.*w
 const handwriting=/Dekko|handwrit|Comic|Cursive|Script/i;
 /** Preserve word-bank phrase boundaries and filled gap geometry before flattening the PDF. */
 export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
+ const cleaned=stripPDFStudentHeader(items);items=cleaned.items;
  const rows:{y:number;items:Run[];text:string}[]=[];
  for(const item of items.filter(i=>i.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4])){
   const y=item.transform[5];let row=rows.find(r=>Math.abs(r.y-y)<2.6);if(!row){row={y,items:[],text:''};rows.push(row)}row.items.push(item);
@@ -71,6 +73,6 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
  }
  const writtenAnswers:ExerciseMark[]=[];
  for(const span of written){const previous=writtenAnswers.at(-1);if(previous&&/^\s*$/.test(text.slice(previous.end,span.start))){previous.end=span.end;previous.multiline=true;}else writtenAnswers.push({...span,id:crypto.randomUUID(),multiline:true});}
- return {text,wordBanks:banks.filter(b=>b.gaps.length>0),writtenAnswers};
+ return {text,wordBanks:banks.filter(b=>b.gaps.length>0),writtenAnswers,headerRemoved:cleaned.removed};
 }
 export function wordBankMarks(hints:WordBankHint[]):ExerciseMark[]{return hints.flatMap(h=>{const id=crypto.randomUUID();return [{start:h.start,end:h.end,id,kind:'wordbank' as const,options:h.options,reusable:h.reusable},...h.gaps.map(g=>({...g,id:crypto.randomUUID(),kind:'word-gap' as const,bankId:id,options:h.options}))]})}

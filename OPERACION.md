@@ -41,3 +41,7 @@ Límites por ZIP: 100 exámenes, 300 entregas, 200 MB de archivo y 16 MB de dato
 ## Verificación
 
 scripts/check-release-backup-timing.mjs ejecuta pruebas locales con cuentas ficticias: privacidad por cuenta, apertura/cierre, publicaciones con copia estable y enlaces revocables, CSV que neutraliza fórmulas, HTML escapado, ZIP con audio, restauración sin reemplazo, tiempo individual persistente y vencimiento real con respuestas parciales. No llama a la IA ni usa la base de producción.
+
+## Encabezados de los PDF
+
+Al subir un PDF, se quita automáticamente el bloque inicial de datos del alumno (nombre, curso/grupo, fecha y nota), junto con el título de portada que lo acompaña. La detección requiere varios campos y se detiene al comenzar los ejercicios; conserva los puntajes de cada actividad. Funciona localmente sin IA. Revisá el texto y la vista del alumno antes de compartir. El PDF original se conserva como referencia visual y no se modifica. Los exámenes ya guardados mantienen su contenido; para aplicar esta limpieza a uno anterior, volvé a cargar el PDF y guardá una nueva versión.
