@@ -49,3 +49,7 @@ Al subir un PDF, se quita automáticamente el bloque inicial de datos del alumno
 ## Presentación de consignas y números
 
 Las vistas de Texto para marcar y del alumno destacan las consignas detectadas y los títulos de sección con espacio antes y después. Los ítems numerados sin separador muestran `1)`, `2)`, etc.; se respeta la puntuación existente. Es un cambio visual que también se aplica a los exámenes guardados: el texto, los identificadores de respuestas y las posiciones de los recortes se conservan. El PDF original y el editor de texto sin formato siguen mostrando la fuente. No consume IA. Revisá el formato de consignas inusuales en la vista previa.
+
+## Guía para profesores
+
+La ayuda está en `/ayuda` y se abre desde “Ayuda para profesores” en el menú docente o en el acceso. Se abre en otra pestaña para conservar la sesión de trabajo y el borrador. Es pública para que también puedan consultarla quienes todavía no activaron su invitación. Incluye seis pasos, ocho capturas con datos ficticios, imágenes ampliables y preguntas frecuentes. No usa IA ni muestra datos reales. Las capturas están en `public/guide/`; al cambiar las pantallas, actualizá las capturas y las instrucciones correspondientes.
