@@ -59,3 +59,9 @@ La ayuda está en `/ayuda` y se abre desde “Ayuda para profesores” en el men
 Cada audio permite elegir una o varias consignas desde “Asignar a ejercicios”. La vista del alumno y la vista previa ubican el reproductor antes de cada consigna seleccionada. Sin asignación, el audio permanece al inicio, como en los exámenes anteriores. Para un examen guardado: Mis exámenes → Ver resultados → Listening del examen → Asignar a ejercicios → Guardar audios. Se mantiene el mismo enlace. Si no se reconocen consignas, se ofrecen ubicaciones junto a las respuestas.
 
 Las asignaciones usan identificadores de consigna, independientes de los recortes y de las soluciones docentes. Se validan al guardar y se conservan en el ZIP y la restauración. Si se modifica una consigna asignada, hay que volver a elegirla o dejar el audio al inicio. Esto no utiliza IA.
+
+## Reconocimiento de opciones en varios renglones
+
+El detector agrupa el enunciado y las opciones A/B/C aunque ocupen varios renglones, manteniendo las continuaciones como parte de su opción. Respeta los límites de pregunta, los títulos de sección y los puntajes. También admite continuaciones de una frase incompleta al pasar de página. No necesita IA.
+
+Para un borrador cargado antes de la mejora, volvé a ejecutar “Reconocer ejercicios”. Se conservan los identificadores, las selecciones docentes que siguen siendo válidas y los recortes manuales. Las opciones que antes estaban incompletas se reemplazan por su texto completo. Revisá la solución de cada selección antes de compartir. Esta operación prepara el borrador; no modifica entregas ni exámenes publicados.
