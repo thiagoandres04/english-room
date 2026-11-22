@@ -52,4 +52,10 @@ Las vistas de Texto para marcar y del alumno destacan las consignas detectadas y
 
 ## Guía para profesores
 
-La ayuda está en `/ayuda` y se abre desde “Ayuda para profesores” en el menú docente o en el acceso. Se abre en otra pestaña para conservar la sesión de trabajo y el borrador. Es pública para que también puedan consultarla quienes todavía no activaron su invitación. Incluye seis pasos, ocho capturas con datos ficticios, imágenes ampliables y preguntas frecuentes. No usa IA ni muestra datos reales. Las capturas están en `public/guide/`; al cambiar las pantallas, actualizá las capturas y las instrucciones correspondientes.
+La ayuda está en `/ayuda` y se abre desde “Ayuda para profesores” en el menú docente o en el acceso. Se abre en otra pestaña para conservar la sesión de trabajo y el borrador. Es pública para que también puedan consultarla quienes todavía no activaron su invitación. Incluye seis pasos, nueve capturas con datos ficticios, imágenes ampliables y preguntas frecuentes. No usa IA ni muestra datos reales. Las capturas están en `public/guide/`; al cambiar las pantallas, actualizá las capturas y las instrucciones correspondientes.
+
+## Audios por ejercicio
+
+Cada audio permite elegir una o varias consignas desde “Asignar a ejercicios”. La vista del alumno y la vista previa ubican el reproductor antes de cada consigna seleccionada. Sin asignación, el audio permanece al inicio, como en los exámenes anteriores. Para un examen guardado: Mis exámenes → Ver resultados → Listening del examen → Asignar a ejercicios → Guardar audios. Se mantiene el mismo enlace. Si no se reconocen consignas, se ofrecen ubicaciones junto a las respuestas.
+
+Las asignaciones usan identificadores de consigna, independientes de los recortes y de las soluciones docentes. Se validan al guardar y se conservan en el ZIP y la restauración. Si se modifica una consigna asignada, hay que volver a elegirla o dejar el audio al inicio. Esto no utiliza IA.

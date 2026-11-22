@@ -47,21 +47,21 @@ export async function POST(req:Request){
   for(const p of parts){if(p.kind&&!['text','choice','multi-choice','wordbank','word-gap'].includes(p.kind))return json({error:'Tipo de ejercicio inválido.'},400);if(p.kind==='wordbank'){if(ids.has(p.id))return json({error:'Identificador repetido.'},400);ids.add(p.id);continue;}if(!choiceIsValid(p,false)||!multiChoiceIsValid(p,false))return json({error:'Revisá los enunciados, las opciones y la solución de cada selección.'},400);if(p.answer!==undefined){if(typeof p.answer!=='string'||p.answer.length>6000||typeof p.id!=='string'||ids.has(p.id)||(p.rubric!==undefined&&typeof p.rubric!=='string')||(p.multiline!==undefined&&typeof p.multiline!=='boolean'))return json({error:'Hay respuestas inválidas.'},400);ids.add(p.id);blanks++;}else if(typeof p.text!=='string')return json({error:'Hay texto inválido.'},400);}
   if(gradingMode==='ai'&&blanks>60)return json({error:'La corrección con IA admite hasta 60 respuestas por examen.'},400);
   if(!blanks)return json({error:'Marcá al menos una respuesta para ocultar.'},400);
-  let audio;try{audio=await validateAudioTracks(data.audio,owner)}catch(e){return json({error:e instanceof Error?e.message:'Revisá los audios.'},400);}
+  let audio;try{audio=await validateAudioTracks(data.audio,owner,parts)}catch(e){return json({error:e instanceof Error?e.message:'Revisá los audios.'},400);}
   const id=crypto.randomUUID();await env.DB!.prepare('INSERT INTO exams(id,owner,title,level,instructions,body,created,grading_mode,audio_json,duration_minutes) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,owner,title.trim(),level,instructions,JSON.stringify(parts),new Date().toISOString(),gradingMode,JSON.stringify(audio),duration).run();return json({id},201);
  }catch{return json({error:'No se pudo guardar el examen. Intentá otra vez.'},503);}
 }
 export async function PATCH(req:Request){
  try{
   const account=await teacherIdentity(req);const owner=account?.owner;if(!owner)return teacherLoginRequired();
-  const raw=await req.text();if(raw.length>12000)return json({error:'La actualización es demasiado grande.'},413);
+  const raw=await req.text();if(raw.length>64000)return json({error:'La actualización es demasiado grande.'},413);
   const data=JSON.parse(raw);if(typeof data.id!=='string')return json({error:'Examen inválido.'},400);
-  const exam=await env.DB!.prepare('SELECT id,duration_minutes FROM exams WHERE id=? AND owner=?').bind(data.id,owner).first<any>();if(!exam)return json({error:'No encontramos ese examen en tu espacio.'},404);
+  const exam=await env.DB!.prepare('SELECT id,duration_minutes,body FROM exams WHERE id=? AND owner=?').bind(data.id,owner).first<any>();if(!exam)return json({error:'No encontramos ese examen en tu espacio.'},404);
   const commands=[];const result:any={};
   if(data.accepting===false)await finalizeExpiredAttempts(owner,data.id);
   if(data.accepting!==undefined){if(typeof data.accepting!=='boolean')return json({error:'Estado inválido.'},400);commands.push(env.DB!.prepare('UPDATE exams SET accepting=? WHERE id=? AND owner=?').bind(data.accepting?1:0,data.id,owner));if(data.accepting)commands.push(env.DB!.prepare('DELETE FROM submission_publications WHERE submission_id IN (SELECT id FROM submissions WHERE exam_id=?)').bind(data.id));result.accepting=data.accepting;}
   if(data.durationMinutes!==undefined){if(!durationIsValid(data.durationMinutes))return json({error:'El tiempo debe ser de 1 a 480 minutos, o sin límite.'},400);commands.push(env.DB!.prepare('UPDATE exams SET duration_minutes=? WHERE id=? AND owner=?').bind(data.durationMinutes,data.id,owner));result.durationMinutes=data.durationMinutes;}
-  if(data.audio!==undefined){let audio;try{audio=await validateAudioTracks(data.audio,owner)}catch(e){return json({error:e instanceof Error?e.message:'Revisá los audios.'},400);}commands.push(env.DB!.prepare('UPDATE exams SET audio_json=? WHERE id=? AND owner=?').bind(JSON.stringify(audio),data.id,owner));result.audio=audio;}
+  if(data.audio!==undefined){let audio;try{audio=await validateAudioTracks(data.audio,owner,JSON.parse(exam.body))}catch(e){return json({error:e instanceof Error?e.message:'Revisá los audios.'},400);}commands.push(env.DB!.prepare('UPDATE exams SET audio_json=? WHERE id=? AND owner=?').bind(JSON.stringify(audio),data.id,owner));result.audio=audio;}
   if(!commands.length)return json({error:'No hay cambios para guardar.'},400);
   await env.DB!.batch(commands);return json(result);
  }catch{return json({error:'No se pudieron actualizar los audios. Volvé a intentarlo.'},503);}

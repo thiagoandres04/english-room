@@ -1,4 +1,5 @@
 import {exerciseTextLines} from '../lib/exercise-text-layout.ts';
+import {Fragment,type ReactNode} from 'react';
 
 function body(text:string){
  // Some PDFs glue a separately printed gap number to the previous word.
@@ -9,9 +10,11 @@ function body(text:string){
  }
  pieces.push(text.slice(start));return pieces;
 }
-export default function ExerciseText({text,atLineStart=true}:{text:string;atLineStart?:boolean}){
+export default function ExerciseText({text,atLineStart=true,beforeLine}:{text:string;atLineStart?:boolean;beforeLine?:(offset:number)=>ReactNode}){
+ let offset=0;
  return <>{exerciseTextLines(text,atLineStart).map((line,index)=>{
+  const before=beforeLine?.(offset);offset+=line.text.length;
   const content=line.number?<><span className="exercise-number" data-suffix={line.number.suffix}>{line.number.raw}</span>{body(line.text.slice(line.number.raw.length))}</>:body(line.text);
-  return <span key={index} className={line.kind==='heading'?'exercise-heading':line.kind==='section'?'exercise-section':undefined}>{content}</span>;
+  return <Fragment key={index}>{before}<span className={line.kind==='heading'?'exercise-heading':line.kind==='section'?'exercise-section':undefined}>{content}</span></Fragment>;
  })}</>;
 }

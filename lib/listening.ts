@@ -1,6 +1,6 @@
 export const MAX_AUDIO_BYTES=25*1024*1024;
 export const MAX_AUDIO_TRACKS=5;
-export type ListeningTrack={id:string;title:string;name:string;size:number};
+export type ListeningTrack={id:string;title:string;name:string;size:number;exerciseIds?:string[]};
 export function sniffAudio(bytes:Uint8Array):string|null{
  const text=(start:number,length:number)=>String.fromCharCode(...bytes.slice(start,start+length));
  if(text(0,3)==='ID3'||(bytes[0]===0xff&&(bytes[1]&0xe0)===0xe0))return 'audio/mpeg';

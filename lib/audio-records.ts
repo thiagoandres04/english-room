@@ -1,6 +1,8 @@
 import {env} from 'cloudflare:workers';
 import {MAX_AUDIO_TRACKS,type ListeningTrack} from './listening';
-export async function validateAudioTracks(value:unknown,owner:string):Promise<ListeningTrack[]>{
+import {validateAudioAssignments} from './audio-placement';
+import type {ExamPart} from './exam-parts';
+export async function validateAudioTracks(value:unknown,owner:string,parts?:ExamPart[]):Promise<ListeningTrack[]>{
  if(value===undefined)return [];
  if(!Array.isArray(value)||value.length>MAX_AUDIO_TRACKS)throw new Error('Podés adjuntar hasta 5 audios por examen.');
  const seen=new Set<string>();const tracks:ListeningTrack[]=[];
@@ -9,7 +11,8 @@ export async function validateAudioTracks(value:unknown,owner:string):Promise<Li
   seen.add(item.id);
   const record=await env.DB!.prepare('SELECT id,name,size FROM audio_files WHERE id=? AND owner=?').bind(item.id,owner).first<{id:string;name:string;size:number}>();
   if(!record)throw new Error('Uno de los audios no pertenece a tu espacio o no está disponible. Volvé a cargarlo.');
-  tracks.push({...record,title:item.title.trim()});
+  const exerciseIds=validateAudioAssignments(item.exerciseIds,parts);
+  tracks.push({...record,title:item.title.trim(),...(exerciseIds.length?{exerciseIds}:{})});
  }
  return tracks;
 }
