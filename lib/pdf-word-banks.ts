@@ -3,7 +3,7 @@ import {stripPDFStudentHeader} from './pdf-student-header.ts';
 import type {ExerciseMark} from './exam-parts.ts';
 type Run=PositionedText&{fontName?:string};
 export type WordBankHint={start:number;end:number;options:string[];reusable:boolean;gaps:{start:number;end:number;answer:string}[]};
-const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|use to)|Read.*words.*box)/i;
+const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|use to)|Read.*(?:words.*box|complete))/i;
 const handwriting=/Dekko|handwrit|Comic|Cursive|Script/i;
 /** Preserve word-bank phrase boundaries and filled gap geometry before flattening the PDF. */
 export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){

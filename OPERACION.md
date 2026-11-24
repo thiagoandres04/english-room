@@ -65,3 +65,9 @@ Las asignaciones usan identificadores de consigna, independientes de los recorte
 El detector agrupa el enunciado y las opciones A/B/C aunque ocupen varios renglones, manteniendo las continuaciones como parte de su opción. Respeta los límites de pregunta, los títulos de sección y los puntajes. También admite continuaciones de una frase incompleta al pasar de página. No necesita IA.
 
 Para un borrador cargado antes de la mejora, volvé a ejecutar “Reconocer ejercicios”. Se conservan los identificadores, las selecciones docentes que siguen siendo válidas y los recortes manuales. Las opciones que antes estaban incompletas se reemplazan por su texto completo. Revisá la solución de cada selección antes de compartir. Esta operación prepara el borrador; no modifica entregas ni exámenes publicados.
+
+## Frases, negritas y marcas de solución
+
+Al cargar el PDF, el detector usa las fuentes para delimitar alternativas separadas por barras que contienen varias palabras, incluso cuando se parten en renglones. Conserva la oración alrededor del casillero y la puntuación final. Los subrayados y círculos vectoriales pueden indicar una palabra o una frase completa. Una única alternativa en negrita también puede indicar la solución; si varias están en negrita, esa presentación no elige una respuesta. Ante marcas contradictorias se deja la referencia pendiente para revisión docente.
+
+Este reconocimiento se realiza en el navegador, sin IA ni tokens. Requiere texto seleccionable y marcas que formen parte del PDF; las imágenes escaneadas no aportan estos datos. Para aplicar esta mejora a un borrador cargado anteriormente, volvé a subir el PDF original: el borrador viejo no contiene los nuevos límites tipográficos. Revisá la vista del alumno y guardá una versión nueva para compartirla. Los enlaces de exámenes ya guardados conservan su contenido.
