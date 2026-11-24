@@ -38,7 +38,8 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
    const options=alternatives.split(/\s*\/\s*/).map(t=>t.replace(/\s+/g,' ').trim());
    if(options.length<2||options.length>12||options.some(t=>!t||t.length>3000)||new Set(options).size!==options.length)continue;
    const match=flexibleMatch(line,text);if(!match)continue;
-   const prompt=(line.slice(0,match.index)+'____'+punctuation+line.slice(match.index+match[0].length)).replace(/\s+/g,' ').trim();
+   const before=line.slice(0,match.index),after=punctuation+line.slice(match.index+match[0].length);
+   const prompt=(before+(/[\p{L}\p{N}]$/u.test(before)?' ':'')+'____'+(/^[\p{L}\p{N}]/u.test(after)?' ':'')+after).replace(/\s+/g,' ').trim();
    candidates.push({line,prompt,options});
   }
   if(candidates.length===1)choices.push(candidates[0]);

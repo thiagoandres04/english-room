@@ -3,7 +3,7 @@ import {extractPageText,type PositionedText} from './pdf-text.ts';
 import type {ExerciseMark} from './exam-parts';
 import {wordBankMarks,type WordBankHint} from './pdf-word-banks.ts';
 import {extractStyledChoices} from './pdf-choice-layout.ts';
-export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice';start?:number;end?:number;prompt?:string;options?:string[]};
+export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice';start?:number;end?:number;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
 type TextRun=PositionedText&{fontName?:string};
 const normalize=(s:string)=>s.replace(/\s+/g,' ').trim();
 const instruction=/^\d{1,3}[.)]?\s+(?:Listen\b|Read the\b|Answer the\b|Choose\b|Match\b|Complete\b|Look at\b|Are the sentences\b|Do you agree\b|Write\b|Circle\b|Tick\b|Select\b)/i;
@@ -107,7 +107,7 @@ function hintedAnswer(source:string,options:string[],hints:AnswerHint[]){
 export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:WordBankHint[]=[]):ExerciseMark[]{
  const lines:SourceLine[]=[];let offset=0;
  for(const line of text.split('\n')){lines.push({text:line,start:offset,end:offset+line.length});offset+=line.length+1;}
- const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,multiline:true}))];
+ const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))];
  const addChoice=(lineIndex:number,endIndex:number,prompt:string,options:string[],answer?:string)=>{
   const start=lines[lineIndex].start,end=lines[endIndex].end;
   marks.push({id:crypto.randomUUID(),start,end,kind:'choice',prompt,options,answer:answer??hintedAnswer(text.slice(start,end),options,hints)});
@@ -154,11 +154,11 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
    if(openQuestions&&/\?$/.test(line)){
     let answerLine=i+1;while(answerLine<lines.length&&!lines[answerLine].text.trim())answerLine++;
     const answer=lines[answerLine]?.text.trim();
-    if(answer&&!/^(?:\d+[.)]?\s|Score:|[A-H][.)]?\s)/.test(answer)){
+    if(answer&&!/^(?:\d+[.)]?\s|Score:|[A-H][.)]?\s)/.test(answer)&&!marks.some(m=>m.start<lines[answerLine].end&&m.end>lines[answerLine].start)){
      marks.push({id:crypto.randomUUID(),start:lines[answerLine].start,end:lines[answerLine].end});i=answerLine;
     }
    }
-  }else if(/^Model answer$/i.test(line)){
+  }else if(/^Model (?:answer|writing)$/i.test(line)){
    let start=i+1;while(start<lines.length&&!lines[start].text.trim())start++;
    let end=start;while(end<lines.length&&!/^Score:/i.test(lines[end].text.trim()))end++;
    while(end>start&&!lines[end-1].text.trim())end--;

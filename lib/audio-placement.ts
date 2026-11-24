@@ -16,7 +16,7 @@ export function audioTargets(parts:ExamPart[]):AudioTarget[]{
     targets.push({id:`exercise:${key}:${occurrence}`,label:`${number?'Ejercicio '+number:'Consigna '+(targets.length+1)} · ${normalized.replace(/^\d{1,3}[.)]?\s*/,'').slice(0,130)}`,partIndex,offset:part.text===undefined?null:offset});
    }offset+=line.text.length;
   }}
-  atLineStart=part.text!==undefined?/\n$/.test(part.text):['choice','multi-choice','wordbank'].includes(part.kind||'');
+  atLineStart=part.text!==undefined?/\n$/.test(part.text):['choice','multi-choice','wordbank'].includes(part.kind||'')&&!part.inline;
  });
  // Older exams may have no recognizable instruction. Allow placing an audio
  // beside a specific response rather than inventing an exercise association.
