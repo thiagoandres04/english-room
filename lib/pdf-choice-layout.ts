@@ -21,10 +21,10 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
  rows.forEach(r=>r.text=extractPageText(r.items));
  const choices:StyledChoice[]=[],boldMarks:{line:string;answer:string}[]=[];
  for(let i=0;i<rows.length;i++){
-  if(!/^\d{1,3}[.)]?\s/.test(rows[i].text))continue;
-  let end=i+1;while(end<rows.length&&!/^(?:\d{1,3}[.)]?\s|Score\s*:|LISTENING\b|READING\b|WRITING\b|GRAMMAR\b|VOCABULARY\b)/i.test(rows[end].text))end++;
+  if(!/^(?:\d{1,3}[.)]?|[A-H][.)])\s/.test(rows[i].text))continue;
+  let end=i+1;while(end<rows.length&&!/^(?:(?:\d{1,3}[.)]?|[A-H][.)])\s|Score\s*:|LISTENING\b|READING\b|WRITING\b|GRAMMAR\b|VOCABULARY\b)/i.test(rows[end].text))end++;
   const block=rows.slice(i,end).flatMap(r=>r.items.sort((a,b)=>a.transform[4]-b.transform[4]));
-  const line=extractPageText(block);if(!line.includes('/'))continue;
+  const line=extractPageText(block);
   const groups:Run[][]=[];let key='';
   for(const run of block){const next=style(run,fonts);if(next!==key){groups.push([]);key=next;}groups.at(-1)!.push(run);}
   const candidates:StyledChoice[]=[];
@@ -32,7 +32,7 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
    // Plain body text can include T/F, answer synonyms, or sentence-building
    // clues. Only an emphasized span supplies reliable phrase boundaries.
    if(!/^(?:italic|bold):/.test(style(group[0],fonts)))continue;
-   const text=extractPageText(group);if(!text.includes('/')||/^\d{1,3}[.)]?\s/.test(text))continue;
+   const text=extractPageText(group);if(!text.includes('/')||/^(?:\d{1,3}[.)]?|[A-H][.)])\s/.test(text))continue;
    const punctuation=/[.,;:!?]+$/.exec(text)?.[0]||'';
    const alternatives=punctuation?text.slice(0,-punctuation.length):text;
    const options=alternatives.split(/\s*\/\s*/).map(t=>t.replace(/\s+/g,' ').trim());

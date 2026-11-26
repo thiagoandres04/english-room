@@ -117,3 +117,14 @@
 .teacher-inline-choice select{background:#eef5e8}
 .exercise-letter-chain{display:block;white-space:normal;overflow-wrap:anywhere;background:#f1f4ee;border:1px solid #dfe6d9;border-radius:8px;padding:12px 15px;margin:10px 0;font-family:monospace;font-size:14px;line-height:2;letter-spacing:.08em}
 @media(max-width:650px){.word-bank-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.word-bank-options .bank-word{font-size:13px;padding:11px 12px}.exercise-text input.short-answer,.inline-choice select{font-size:16px;width:160px}.exercise-letter-chain{padding:10px;font-size:13px;letter-spacing:.05em}}
+
+.exam-figure{display:block;white-space:normal;margin:18px 0 24px;max-width:100%;break-inside:avoid}
+.exam-figure-open{display:block;position:relative;width:100%;padding:8px;border:1px solid #dce4d6;border-radius:9px;background:#fff;cursor:zoom-in}
+.exam-figure-open img{display:block;width:100%;height:auto;max-width:100%;object-fit:contain}
+.exam-figure-open>svg{position:absolute;right:14px;top:14px;padding:5px;box-sizing:content-box;background:#fff;border:1px solid #d8e3d1;border-radius:50%;color:#416b42}
+.exam-figure figcaption{font-size:12px;line-height:1.6;color:#667d61;padding-top:8px}
+.exam-figure-dialog{border:0;border-radius:12px;padding:14px;width:min(96vw,1100px);max-width:96vw;max-height:94vh;background:#fff}
+.exam-figure-dialog::backdrop{background:#172a26b3}
+.exam-figure-close{display:flex;position:sticky;top:0;margin-left:auto;border:1px solid #dce4d6;border-radius:50%;width:40px;height:40px;background:white;z-index:1}
+.exam-figure-zoom{max-height:calc(90vh - 64px);overflow:auto;padding:10px}
+.exam-figure-zoom img{display:block;width:max(900px,100%);height:auto;max-width:none}

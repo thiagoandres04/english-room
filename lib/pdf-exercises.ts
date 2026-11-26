@@ -3,12 +3,21 @@ import {extractPageText,type PositionedText} from './pdf-text.ts';
 import type {ExerciseMark} from './exam-parts';
 import {wordBankMarks,type WordBankHint} from './pdf-word-banks.ts';
 import {extractStyledChoices} from './pdf-choice-layout.ts';
-export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice';start?:number;end?:number;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
+import type {ExamFigure} from './exam-figures.ts';
+export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice'|'figure';start?:number;end?:number;figure?:ExamFigure;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
 type TextRun=PositionedText&{fontName?:string};
 const normalize=(s:string)=>s.replace(/\s+/g,' ').trim();
 const instruction=/^\d{1,3}[.)]?\s+(?:Listen\b|Read the\b|Answer the\b|Choose\b|Match\b|Complete\b|Look at\b|Are the sentences\b|Do you agree\b|Write\b|Circle\b|Tick\b|Select\b)/i;
 type SourceLine={text:string;start:number;end:number};
 const letteredOption=/^([A-H])[.)]?\s+(.+)$/;
+/** Ordered labels can share a row; punctuation on a label is optional. */
+function optionsOnLine(text:string){
+ const first=letteredOption.exec(text);if(!first)return null;
+ const labels=[...text.matchAll(/(?:^|\s)([A-H])[.)]?\s+/g)];
+ if(labels.length<2)return [{letter:first[1],text:first[2]}];
+ if(labels.some((m,i)=>m[1]!==String.fromCharCode(first[1].charCodeAt(0)+i)))return null;
+ return labels.map((m,i)=>({letter:m[1],text:text.slice(m.index!+m[0].length,labels[i+1]?.index??text.length).trim()}));
+}
 const choiceBoundary=/^(?:\d{1,3}[.)]?\s|Score\s*:|Model answer\b|©)|^(?:LISTENING|READING|WRITING|SPEAKING|GRAMMAR|VOCABULARY|USE OF ENGLISH)(?:\s*(?:&|AND|\/)\s*(?:LISTENING|READING|WRITING|SPEAKING|GRAMMAR|VOCABULARY))?\s*$/i;
 /** Read a whole question block: both the stem and each alternative may wrap.
  * New questions, section headings and scores are boundaries, not option text. */
@@ -25,10 +34,9 @@ function readLetteredQuestion(lines:SourceLine[],start:number,occupied:ExerciseM
  for(let i=first;i<lines.length&&i<first+160;i++){
   const text=lines[i].text.trim();if(!text){blank=true;continue;}
   if(choiceBoundary.test(text)||blocked(i))break;
-  const option=letteredOption.exec(text);
-  if(option){
-   if(option[1]!==String.fromCharCode(65+options.length))return null;
-   options.push(option[1]+' '+option[2]);
+   const rowOptions=optionsOnLine(text);
+   if(rowOptions){
+    for(const option of rowOptions){if(!option.text||option.letter!==String.fromCharCode(65+options.length))return null;options.push(option.letter+' '+option.text);}
   }else{
    // Keep blank paragraphs outside a completed alternative, but allow an
    // unfinished sentence to continue after a PDF page separator.
@@ -75,7 +83,7 @@ export function extractAnswerHints(items:TextRun[],operators:{fnArray:ArrayLike<
    const width=maxX-minX,height=maxY-minY;
    if(contour.curves===0&&!contour.closed&&points.length===4&&width>=4&&width<=500&&height<.8){
     const ink=items.filter(item=>{const baseline=item.transform[5],x=item.transform[4],overlap=Math.max(0,Math.min(x+item.width,maxX)-Math.max(x,minX));return /[\p{L}\p{N}]/u.test(item.str)&&baseline-minY>=-.2&&baseline-minY<=Math.max(2,item.height*.4)&&overlap/Math.max(1,item.width)>.7});
-    if(ink.length){const line=extractPageText(onLine(ink[0].transform[5]));if(line.includes('/'))hints.push({line,answer:extractPageText(ink).replace(/\s+/g,' ').trim(),source:'underline'});}
+    if(ink.length){const line=extractPageText(onLine(ink[0].transform[5]));hints.push({line,answer:extractPageText(ink).replace(/\s+/g,' ').trim(),source:'underline'});}
    }
    if(contour.curves<4&&!(contour.curves>=2&&contour.closed))continue;
    if(width<6||width>500||height<4||height>45||width/height>60)continue;
@@ -93,14 +101,17 @@ export function extractAnswerHints(items:TextRun[],operators:{fnArray:ArrayLike<
 function hintedAnswer(source:string,options:string[],hints:AnswerHint[]){
  const normalized=normalize(source);
  for(const kinds of [['circle','underline'],['bold']]){
-  const matches=new Set<string>();
+  const matches=new Set<string>(),labels=new Set<string>();
   for(const hint of hints.filter(h=>kinds.includes(h.source))){
    if(!normalized.includes(normalize(hint.line)))continue;
-   const answer=normalize(hint.answer).replace(/[.,;:!?]+$/,'');if(!answer)continue;
-   for(const option of options){const comparable=normalize(option).replace(/[.,;:!?]+$/,'');if(comparable===answer||comparable.startsWith(answer+' '))matches.add(option);}
+   const clean=(s:string)=>normalize(s).replace(/^([A-H])[.)]\s*/,'$1 ').replace(/[.,;:!?]+$/,'');
+   const answer=clean(hint.answer);if(!answer)continue;
+   for(const option of options){const comparable=clean(option),body=comparable.replace(/^[A-H]\s+/,'');if(comparable===answer||body===answer)matches.add(option);else if(comparable.startsWith(answer+' '))(hint.source==='bold'&&/^[A-H]$/.test(answer)?labels:matches).add(option);}
   }
   if(matches.size===1)return [...matches][0];
   if(matches.size>1)return '';
+  if(labels.size===1)return [...labels][0];
+  if(labels.size>1)return '';
  }
  return '';
 }
@@ -108,6 +119,7 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
  const lines:SourceLine[]=[];let offset=0;
  for(const line of text.split('\n')){lines.push({text:line,start:offset,end:offset+line.length});offset+=line.length+1;}
  const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))];
+ marks.push(...hints.filter(h=>h.source==='figure'&&h.figure&&Number.isInteger(h.start)&&h.start===h.end).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,kind:'figure' as const,figure:h.figure})));
  const addChoice=(lineIndex:number,endIndex:number,prompt:string,options:string[],answer?:string)=>{
   const start=lines[lineIndex].start,end=lines[endIndex].end;
   marks.push({id:crypto.randomUUID(),start,end,kind:'choice',prompt,options,answer:answer??hintedAnswer(text.slice(start,end),options,hints)});
@@ -120,6 +132,7 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
    matchingOptions=null;openQuestions=!/\b(?:complete|fill|tick|check|match)\b/i.test(line);
    const match=/Match.*(?:speakers?|numbers?)\s+(\d+)\s*[–—-]\s*(\d+)/i.exec(line);
    if(match){const first=Number(match[1]),last=Number(match[2]);if(last>=first&&last-first<12)matchingOptions=Array.from({length:last-first+1},(_,j)=>String(first+j));}
+   const texts=/Choose the correct text\s*\(([^)]+)\)/i.exec(line);if(texts){const options=texts[1].match(/\b[A-H]\b/g);if(options&&options.length>=2&&new Set(options).size===options.length)matchingOptions=options;}
    continue;
   }
   if(/^Score:/i.test(line)){matchingOptions=null;openQuestions=true;continue;}
@@ -136,12 +149,12 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
    if(question){addChoice(i,question.end,question.prompt,question.options);i=question.end;continue;}
   }
   if(matchingOptions){
-   const match=/^([A-H])[.)]?\s+(.+?)\s+(\d{1,2})$/.exec(line);
+   const match=/^(\d{1,3}|[A-H])[.)]?\s+(.+?)\s+([A-H]|\d{1,2})$/.exec(line);
    if(match&&matchingOptions.includes(match[3])){addChoice(i,i,match[1]+' '+match[2],matchingOptions,match[3]);continue;}
   }
-  if(/^\d{1,3}[.)]?\s/.test(line)){
+  if(/^(?:\d{1,3}[.)]?|[A-H][.)])\s/.test(line)){
    const slash=/\b[\p{L}][\p{L}'’’-]*(?:\s*\/\s*[\p{L}][\p{L}'’’-]*){1,5}\b/u.exec(line);
-   if(slash&&!/^\d+[.)]?\s*\(/.test(line)){
+   if(slash&&!/^(?:\d+[.)]?|[A-H][.)])\s*\(/.test(line)){
     const options=slash[0].split(/\s*\/\s*/).map(o=>o.trim());
     if(new Set(options).size===options.length){
      const isBoolean=options.every(o=>['T','F','NI','True','False'].includes(o));
@@ -191,5 +204,5 @@ export function mergeDetectedExercises(previous:ExerciseMark[],detected:Exercise
   return result;
  });
  for(const candidate of next)if(candidate.bankId)candidate.bankId=ids.get(candidate.bankId)||candidate.bankId;
- return [...previous.filter(old=>!next.some(c=>c.start<old.end&&c.end>old.start)),...next].sort((a,b)=>a.start-b.start);
+ return [...previous.filter(old=>!next.some(c=>c.start<old.end&&c.end>old.start||old.kind==='figure'&&c.kind==='figure'&&c.start===old.start)),...next].sort((a,b)=>a.start-b.start);
 }

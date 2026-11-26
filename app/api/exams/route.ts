@@ -1,3 +1,4 @@
+import {figuresAreValid} from '../../../lib/exam-figures';
 import {multiChoiceIsValid} from '../../../lib/multi-choice';
 import {finalizeExpiredAttempts} from '../../../lib/timed-attempts';
 import {durationIsValid,validStudentToken,tokenHash} from '../../../lib/exam-access';
@@ -43,8 +44,9 @@ export async function POST(req:Request){
   if(typeof title!=='string'||!title.trim()||title.length>120||typeof level!=='string'||level.length>30||typeof instructions!=='string'||instructions.length>2000||!Array.isArray(parts)||parts.length>1000)return json({error:'Revisá los datos del examen.'},400);
   let blanks=0;const ids=new Set();
   if(parts.some((p:any)=>!p||typeof p!=='object'))return json({error:'Hay ejercicios inválidos.'},400);
+  if(!figuresAreValid(parts))return json({error:'Revisá las imágenes de referencia del examen.'},400);
   if(!wordBanksAreValid(parts,false))return json({error:'Revisá los bancos de palabras y las soluciones de sus casilleros.'},400);
-  for(const p of parts){if(p.kind&&!['text','choice','multi-choice','wordbank','word-gap'].includes(p.kind))return json({error:'Tipo de ejercicio inválido.'},400);if(p.kind==='wordbank'){if(ids.has(p.id))return json({error:'Identificador repetido.'},400);ids.add(p.id);continue;}if(!choiceIsValid(p,false)||!multiChoiceIsValid(p,false))return json({error:'Revisá los enunciados, las opciones y la solución de cada selección.'},400);if(p.answer!==undefined){if(typeof p.answer!=='string'||p.answer.length>6000||typeof p.id!=='string'||ids.has(p.id)||(p.rubric!==undefined&&typeof p.rubric!=='string')||(p.multiline!==undefined&&typeof p.multiline!=='boolean'))return json({error:'Hay respuestas inválidas.'},400);ids.add(p.id);blanks++;}else if(typeof p.text!=='string')return json({error:'Hay texto inválido.'},400);}
+  for(const p of parts){if(p.kind&&!['text','choice','multi-choice','wordbank','word-gap','figure'].includes(p.kind))return json({error:'Tipo de ejercicio inválido.'},400);if(p.kind==='wordbank'||p.kind==='figure'){if(typeof p.id!=='string'||!p.id||ids.has(p.id))return json({error:'Identificador repetido.'},400);ids.add(p.id);continue;}if(!choiceIsValid(p,false)||!multiChoiceIsValid(p,false))return json({error:'Revisá los enunciados, las opciones y la solución de cada selección.'},400);if(p.answer!==undefined){if(typeof p.answer!=='string'||p.answer.length>6000||typeof p.id!=='string'||ids.has(p.id)||(p.rubric!==undefined&&typeof p.rubric!=='string')||(p.multiline!==undefined&&typeof p.multiline!=='boolean'))return json({error:'Hay respuestas inválidas.'},400);ids.add(p.id);blanks++;}else if(typeof p.text!=='string')return json({error:'Hay texto inválido.'},400);}
   if(gradingMode==='ai'&&blanks>60)return json({error:'La corrección con IA admite hasta 60 respuestas por examen.'},400);
   if(!blanks)return json({error:'Marcá al menos una respuesta para ocultar.'},400);
   let audio;try{audio=await validateAudioTracks(data.audio,owner,parts)}catch(e){return json({error:e instanceof Error?e.message:'Revisá los audios.'},400);}

@@ -3,10 +3,10 @@ import {stripPDFStudentHeader} from './pdf-student-header.ts';
 import type {ExerciseMark} from './exam-parts.ts';
 type Run=PositionedText&{fontName?:string};
 export type WordBankHint={start:number;end:number;options:string[];reusable:boolean;bankMode?:'write';gaps:{start:number;end:number;answer:string}[]};
-const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|verbs|adjectives|nouns|phrases|box|use to)|Read.*(?:words.*box|complete))/i;
+const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|verbs|adjectives|nouns|phrases|box|use to)|Read.*(?:words.*box|complete)|Match.*(?:words|adjectives).*(?:sentences|box))/i;
 const handwriting=/Dekko|Overlock|handwrit|Comic|Cursive|Script/i;
 /** Preserve word-bank phrase boundaries and filled gap geometry before flattening the PDF. */
-export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
+export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},answerHints:{line:string;answer:string;source:string}[]=[]){
  const cleaned=stripPDFStudentHeader(items);items=cleaned.items;
  const rows:{y:number;items:Run[];text:string}[]=[];
  for(const item of items.filter(i=>i.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4])){
@@ -40,7 +40,7 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
   }
   if(grammar)options.push('used to','use to',"didn't use to",'did','Did','did you use to');
   if(options.length<2||options.length>40||new Set(options).size!==options.length)continue;
-  const changeForm=/\b(?:correct|appropriate) form\b|change.*form/i.test(row.text)&&!grammar;
+  const changeForm=/\b(?:correct|appropriate)\s+(?:[a-z]+\s+){0,3}form\b|change.*form/i.test(row.text)&&!grammar;
   const bankIndex=banks.length;const bank:WordBankHint={start:0,end:0,options,reusable:grammar||/more than once|reuse/i.test(row.text),...(changeForm?{bankMode:'write' as const}:{}),gaps:[]};banks.push(bank);
   const bankToken=token(options.join(' | '),bankIndex,false);
   if(grammar)virtual.push({...row.items[0],str:bankToken,transform:[...row.items[0].transform.slice(0,4),70,row.y-30],width:400});
@@ -49,8 +49,9 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
   for(let n=i+1;n<last;n++){
    const r=rows[n];if(r.y>=bankBottom)continue;
    for(const run of r.items){
-    if(changeForm||!handwriting.test(fonts[run.fontName||'']||'')||!run.str.trim())continue;
-    const answer=run.str.trim();if(!options.includes(answer))continue;
+    const answerStyle=handwriting.test(fonts[run.fontName||'']||'')||/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(run.str.trim());
+    if(changeForm||!answerStyle||!run.str.trim())continue;
+    const answer=options.find(o=>o.toLowerCase()===run.str.trim().toLowerCase());if(!answer)continue;
     replacements.set(run,token(answer,bankIndex,true));
     // Superscript gap numbers are layout annotations, not standalone text lines.
     items.filter(it=>/^\d{1,2}$/.test(it.str.trim())&&it.transform[4]<run.transform[4]&&run.transform[4]-it.transform[4]<24&&it.transform[5]-run.transform[5]>2&&it.transform[5]-run.transform[5]<7).forEach(it=>removed.add(it));
@@ -105,6 +106,21 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={}){
   for(const group of groups){const first=group[0],value=extractPageText(group),choice=inlineChoices.get(first);group.forEach(i=>removed.add(i));removed.delete(first);replacements.set(first,token(value,-1,true,choice?{...choice,answer:choice.options.find(o=>o.toLowerCase()===value.toLowerCase())||''}:undefined));}
  }
  let text=extractPageText([...items.filter(i=>!removed.has(i)).map(i=>replacements.has(i)?{...i,str:replacements.get(i)!}:i),...virtual]);
+ // Typed answer keys often use uppercase bold inside ordinary body text.
+ // Recover the whole uppercase phrase when its font changes mid-word (e.g.
+ // only the first letters of an answer are bold), without hiding headings.
+ const patches:{start:number;end:number;value:string}[]=[];let searchFrom=0;
+ for(const row of rows){
+  if(!/[\p{Ll}]/u.test(row.text)||row.text.replace(/\([^)]*\)/g,'').includes('/'))continue;
+  const ink=row.items.filter(run=>!replacements.has(run)&&/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(run.str.trim()));if(!ink.length)continue;
+  const at=text.indexOf(row.text,searchFrom);if(at<0)continue;searchFrom=at+row.text.length;
+  for(const match of row.text.matchAll(/[\p{Lu}][\p{Lu}\s’'-]*/gu)){
+   const value=match[0].trim();if(value.replace(/[^\p{Lu}]/gu,'').length<2||!ink.some(run=>value.includes(run.str.trim())))continue;
+   const normalized=row.text.replace(/\s+/g,' ').trim();if(!answerHints.some(h=>h.source==='underline'&&normalized.includes(h.line.replace(/\s+/g,' ').trim())&&value.includes(h.answer.replace(/\s+/g,' ').trim())))continue;
+   patches.push({start:at+match.index!,end:at+match.index!+value.length,value});
+  }
+ }
+ for(const p of patches.sort((a,b)=>b.start-a.start))text=text.slice(0,p.start)+token(p.value,-1,true)+text.slice(p.end);
  // Replace markers in output order so all offsets refer to the final readable text.
  const seen=[...text.matchAll(/\uE000(\d+)\uE001/g)];let shift=0;
  for(const m of seen){const t=tokens[Number(m[1])];const start=m.index!+shift;text=text.slice(0,start)+t.value+text.slice(start+m[0].length);shift+=t.value.length-m[0].length;

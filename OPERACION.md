@@ -79,3 +79,13 @@ Las respuestas con fuentes de solución (incluidas Dekko y Overlock) se reconoce
 En los ejercicios que piden la forma correcta de las palabras, el banco muestra las palabras base en tarjetas separadas y el alumno escribe la forma que corresponda. Por ejemplo, `write` puede requerir `writing`: arrastrar la forma base no resolvería ese ejercicio. Los bancos que piden usar las palabras tal como aparecen mantienen la función de arrastrar. Se conserva el orden del PDF.
 
 Las tablas numeradas de opciones A/B/C asociadas a huecos resueltos de un texto se convierten en selectores junto a cada hueco. La profesora puede revisar su solución y el alumno los recibe sin selección. El modelo de writing queda en un campo grande de respuesta. Estas variantes se conservan al guardar, entregar, exportar y restaurar, sin utilizar IA. La nueva detección requiere volver a cargar el PDF; la separación visual de bancos existentes se aplica también a los exámenes guardados.
+
+## Opciones horizontales, negritas y tablas como imagen
+
+Las opciones A/B/C pueden aparecer en una fila, en filas separadas o con frases que continúan en otro renglón. La puntuación del rótulo es opcional. La solución se toma de la alternativa marcada, distinguiendo los rótulos en negrita de una alternativa completa en negrita. Las opciones con barras también se reconocen en ítems A–H, además de los numerados, y conservan sus frases completas cuando el formato delimita cada alternativa. El alumno recibe opciones sin ninguna selección ni énfasis de solución.
+
+Las respuestas escritas en mayúsculas, negrita y subrayado dentro del enunciado se ocultan como casilleros. Se mantienen los enunciados y las pistas; un acrónimo en negrita sin marca de solución no se oculta automáticamente. Una palabra con un cambio de fuente en mitad de su respuesta se reúne antes de crear el casillero.
+
+Al cargar un PDF resuelto se conservan también las imágenes de referencia situadas inmediatamente después de una consigna que remite a un plan, tabla, gráfico, mapa o diagrama. Se muestra la imagen original y se puede ampliar; no se transcribe ni se utiliza OCR o IA. Se conservan en el borrador, el examen, el respaldo JSON/ZIP y la exportación imprimible. No son preguntas y no aumentan la cantidad de respuestas. Esto no convierte en interactivos los ejercicios escaneados dentro de una imagen.
+
+Se admiten hasta ocho imágenes de referencia, con un máximo conjunto de 120.000 caracteres de imagen codificada y 60.000 por imagen. Solo se guardan imágenes raster incrustadas; no se aceptan SVG ni direcciones externas. Para aplicar la nueva lectura a un borrador anterior, volver a subir el original y revisar la vista del alumno antes de guardar otra versión.
