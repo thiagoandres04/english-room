@@ -4,6 +4,7 @@ import type {ExerciseMark} from './exam-parts';
 import {wordBankMarks,type WordBankHint} from './pdf-word-banks.ts';
 import {extractStyledChoices} from './pdf-choice-layout.ts';
 import type {ExamFigure} from './exam-figures.ts';
+import {repairedChoiceHints,repairedWordBanks,recoveredTypedKeys,isReadingTitle} from './pdf-hint-repair.ts';
 export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice'|'figure';start?:number;end?:number;figure?:ExamFigure;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
 type TextRun=PositionedText&{fontName?:string};
 const normalize=(s:string)=>s.replace(/\s+/g,' ').trim();
@@ -116,10 +117,12 @@ function hintedAnswer(source:string,options:string[],hints:AnswerHint[]){
  return '';
 }
 export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:WordBankHint[]=[]):ExerciseMark[]{
+ hints=repairedChoiceHints(hints);wordBanks=repairedWordBanks(text,wordBanks,hints);
  const lines:SourceLine[]=[];let offset=0;
  for(const line of text.split('\n')){lines.push({text:line,start:offset,end:offset+line.length});offset+=line.length+1;}
- const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))];
+ const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)&&!isReadingTitle(text,h.start!,h.end!)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))];
  marks.push(...hints.filter(h=>h.source==='figure'&&h.figure&&Number.isInteger(h.start)&&h.start===h.end).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,kind:'figure' as const,figure:h.figure})));
+ marks.push(...recoveredTypedKeys(text,hints,marks));
  const addChoice=(lineIndex:number,endIndex:number,prompt:string,options:string[],answer?:string)=>{
   const start=lines[lineIndex].start,end=lines[endIndex].end;
   marks.push({id:crypto.randomUUID(),start,end,kind:'choice',prompt,options,answer:answer??hintedAnswer(text.slice(start,end),options,hints)});
@@ -144,7 +147,7 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
    if(source===target){addChoice(i,end,hint.prompt!,hint.options!);i=end;inlineFound=true;break;}
   }
   if(inlineFound)continue;
-  if(/^\d{1,3}[.)]?\s/.test(line)){
+  if(/^\d{1,3}[.)]?\s/.test(line)||/[_…]{2,}/.test(line)){
    const question=readLetteredQuestion(lines,i,marks);
    if(question){addChoice(i,question.end,question.prompt,question.options);i=question.end;continue;}
   }
@@ -183,14 +186,14 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
 }
 
 /** Re-recognition can extend a truncated option without erasing teacher edits. */
-export function mergeDetectedExercises(previous:ExerciseMark[],detected:ExerciseMark[]):ExerciseMark[]{
+export function mergeDetectedExercises(previous:ExerciseMark[],detected:ExerciseMark[],text=''):ExerciseMark[]{
  const ids=new Map<string,string>();
  function mappedOption(value:string,options:string[]){
   const exact=options.find(o=>normalize(o)===normalize(value));if(exact)return exact;
   const matches=options.filter(o=>normalize(o).startsWith(normalize(value)+' ')||normalize(value).startsWith(normalize(o)+' '));
   return matches.length===1?matches[0]:undefined;
  }
- const next=detected.filter(candidate=>!previous.some(old=>!old.kind&&old.start<candidate.end&&old.end>candidate.start&&(old.start!==candidate.start||old.end!==candidate.end))).map(candidate=>{
+ const next=detected.filter(candidate=>!previous.some(old=>!old.kind&&old.start<candidate.end&&old.end>candidate.start&&(old.start!==candidate.start||old.end!==candidate.end)&&!(candidate.kind==='choice'&&/^[\s_.…–—-]+$/.test(text.slice(old.start,old.end))))).map(candidate=>{
   const old=previous.find(m=>m.start===candidate.start&&m.kind===candidate.kind&&(m.end===candidate.end||m.kind==='choice'&&candidate.end>=m.end&&normalize(candidate.prompt||'').startsWith(normalize(m.prompt||''))));
   const result={...candidate};if(!old)return result;
   ids.set(candidate.id,old.id);result.id=old.id;

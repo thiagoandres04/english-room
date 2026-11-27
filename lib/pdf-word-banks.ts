@@ -5,6 +5,7 @@ type Run=PositionedText&{fontName?:string};
 export type WordBankHint={start:number;end:number;options:string[];reusable:boolean;bankMode?:'write';gaps:{start:number;end:number;answer:string}[]};
 const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|verbs|adjectives|nouns|phrases|box|use to)|Read.*(?:words.*box|complete)|Match.*(?:words|adjectives).*(?:sentences|box))/i;
 const handwriting=/Dekko|Overlock|handwrit|Comic|Cursive|Script/i;
+const answerText=(value:string)=>value.trim().replace(/[.,;:!?]+$/,'');
 /** Preserve word-bank phrase boundaries and filled gap geometry before flattening the PDF. */
 export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},answerHints:{line:string;answer:string;source:string}[]=[]){
  const cleaned=stripPDFStudentHeader(items);items=cleaned.items;
@@ -34,7 +35,9 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
   for(const r of bankRows){
    const runs=[...r.items].sort((a,b)=>a.transform[4]-b.transform[4]);let phrase='';let previous:Run|undefined;
    for(const run of runs){const gap=previous?run.transform[4]-previous.transform[4]-previous.width:Infinity;
-    if(gap>Math.max(7,run.height*.7)&&phrase){options.push(phrase.trim());phrase=''}
+    // A double-space column gap is smaller than a whole letter's height.
+    // Keep normal spaces inside phrases, but separate adjacent bank entries.
+    if(gap>Math.max(5,run.height*.5)&&phrase){options.push(phrase.trim());phrase=''}
     phrase+=(phrase?' ':'')+run.str.trim();previous=run;
    }if(phrase)options.push(phrase.trim());
   }
@@ -49,10 +52,10 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
   for(let n=i+1;n<last;n++){
    const r=rows[n];if(r.y>=bankBottom)continue;
    for(const run of r.items){
-    const answerStyle=handwriting.test(fonts[run.fontName||'']||'')||/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(run.str.trim());
+    const answerStyle=handwriting.test(fonts[run.fontName||'']||'')||/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(answerText(run.str));
     if(changeForm||!answerStyle||!run.str.trim())continue;
-    const answer=options.find(o=>o.toLowerCase()===run.str.trim().toLowerCase());if(!answer)continue;
-    replacements.set(run,token(answer,bankIndex,true));
+    const answer=options.find(o=>o.toLowerCase()===answerText(run.str).toLowerCase());if(!answer)continue;
+    replacements.set(run,token(answer,bankIndex,true)+(run.str.trim().slice(answerText(run.str).length)));
     // Superscript gap numbers are layout annotations, not standalone text lines.
     items.filter(it=>/^\d{1,2}$/.test(it.str.trim())&&it.transform[4]<run.transform[4]&&run.transform[4]-it.transform[4]<24&&it.transform[5]-run.transform[5]>2&&it.transform[5]-run.transform[5]<7).forEach(it=>removed.add(it));
    }
@@ -112,11 +115,11 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
  const patches:{start:number;end:number;value:string}[]=[];let searchFrom=0;
  for(const row of rows){
   if(!/[\p{Ll}]/u.test(row.text)||row.text.replace(/\([^)]*\)/g,'').includes('/'))continue;
-  const ink=row.items.filter(run=>!replacements.has(run)&&/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(run.str.trim()));if(!ink.length)continue;
+  const ink=row.items.filter(run=>!replacements.has(run)&&/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(answerText(run.str)));if(!ink.length)continue;
   const at=text.indexOf(row.text,searchFrom);if(at<0)continue;searchFrom=at+row.text.length;
   for(const match of row.text.matchAll(/[\p{Lu}][\p{Lu}\s’'-]*/gu)){
-   const value=match[0].trim();if(value.replace(/[^\p{Lu}]/gu,'').length<2||!ink.some(run=>value.includes(run.str.trim())))continue;
-   const normalized=row.text.replace(/\s+/g,' ').trim();if(!answerHints.some(h=>h.source==='underline'&&normalized.includes(h.line.replace(/\s+/g,' ').trim())&&value.includes(h.answer.replace(/\s+/g,' ').trim())))continue;
+   const value=match[0].trim();if(value.replace(/[^\p{Lu}]/gu,'').length<2||!ink.some(run=>value.includes(answerText(run.str))))continue;
+   const normalized=row.text.replace(/\s+/g,' ').trim();if(!answerHints.some(h=>h.source==='underline'&&normalized.includes(h.line.replace(/\s+/g,' ').trim())&&value.includes(answerText(h.answer.replace(/\s+/g,' ')))))continue;
    patches.push({start:at+match.index!,end:at+match.index!+value.length,value});
   }
  }

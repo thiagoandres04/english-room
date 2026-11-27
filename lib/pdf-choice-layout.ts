@@ -11,6 +11,26 @@ function flexibleMatch(text:string,part:string){
  const pattern=part.trim().split(/\s+/).map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('\\s+');
  return new RegExp(pattern,'u').exec(text);
 }
+// Plain-font alternatives may share a text run with the sentence. Selective
+// bold supplies the complete key; slash separators delimit all middle options.
+// At the outer edges preserve common compound nouns and verb-particle phrases.
+const compoundOptions=['social media','special effects','public transport','credit card','debit card','mobile phone','video game'];
+export function plainSlashChoice(line:string,keys:string[]):StyledChoice|undefined{
+ const source=line.replace(/\s+/g,' ').trim(),pieces=source.split(/\s*\/\s*/);
+ if(pieces.length<2||pieces.length>12||pieces.some(p=>!p.trim()))return;
+ const first=pieces[0],last=pieces.at(-1)!;
+ const leftKey=keys.find(k=>first.endsWith(k)&&!/[\p{L}\p{N}]/u.test(first[first.length-k.length-1]||' '));
+ const rightKey=keys.find(k=>last.startsWith(k)&&!/[\p{L}\p{N}]/u.test(last[k.length]||' '));
+ const leftPhrase=compoundOptions.find(p=>first.toLowerCase().endsWith(p));
+ const rightPhrase=compoundOptions.find(p=>last.toLowerCase().startsWith(p));
+ const left=leftKey||leftPhrase&&first.slice(-leftPhrase.length)||/[\p{L}][\p{L}'’\u2011-]*\s+(?:on|out|off|up|down|away|back|over|after|into|through|about|with|for|to)$/u.exec(first)?.[0]||/[\p{L}][\p{L}'’\u2011-]*$/u.exec(first)?.[0];
+ const right=rightKey||rightPhrase&&last.slice(0,rightPhrase.length)||/^[\p{L}][\p{L}'’\u2011-]*/u.exec(last)?.[0];
+ if(!left||!right)return;
+ const options=[left,...pieces.slice(1,-1).map(p=>p.trim()),right];
+ if(options.some(o=>o.length>3000)||new Set(options).size!==options.length||options.filter(o=>keys.includes(o)).length!==1)return;
+ const before=first.slice(0,-left.length),after=last.slice(right.length);
+ return {line,prompt:(before+'____'+after).trim(),options};
+}
 /** Font changes delimit complete alternatives, including phrases and wraps.
  * Bold is evidence of a solution only when exactly one alternative matches. */
 export function extractStyledChoices(items:Run[],fonts:Record<string,string>={}){
@@ -42,10 +62,12 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
    const prompt=(before+(/[\p{L}\p{N}]$/u.test(before)?' ':'')+'____'+(/^[\p{L}\p{N}]/u.test(after)?' ':'')+after).replace(/\s+/g,' ').trim();
    candidates.push({line,prompt,options});
   }
-  if(candidates.length===1)choices.push(candidates[0]);
+  const boldStart=boldMarks.length;
   let ink:Run[]=[];
   const flush=()=>{if(!ink.length)return;for(const answer of extractPageText(ink).split(/\s*\/\s*/).map(t=>t.replace(/\s+/g,' ').trim().replace(/[.,;:!?]+$/,'')))if(/[\p{L}]/u.test(answer)&&answer.length<=3000)boldMarks.push({line,answer});ink=[];};
   for(const run of block){if(bold(fonts[run.fontName||'']||'')&&!/^\d{1,3}[.)]?$/.test(run.str.trim()))ink.push(run);else flush();}flush();
+  if(candidates.length===1)choices.push(candidates[0]);
+  else if(!candidates.length){const choice=plainSlashChoice(line,boldMarks.slice(boldStart).map(h=>h.answer));if(choice)choices.push(choice);}
  }
  return {choices,boldMarks};
 }
