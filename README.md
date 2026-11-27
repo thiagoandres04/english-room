@@ -119,3 +119,9 @@ Esta es una copia de código para presentación y revisión. No contiene la base
 Las dependencias conservan sus propias licencias. Este repositorio no incorpora una licencia de código abierto para el código de la aplicación.
 
 Los profesores pueden filtrar su biblioteca por año y eliminar sus propios exámenes cerrados, con confirmación y opción de respaldo previo. La eliminación incluye las entregas, correcciones y devoluciones vinculadas.
+
+## Reconocimiento visual opcional
+
+En Preparar ejercicios, **Reconocer con IA** analiza el examen completo, la página actual o una selección de texto completa. Si el PDF original ya no está en memoria, se puede adjuntar sin alterar el borrador. Se envían texto y páginas JPEG a OpenAI Responses API (`gpt-6.1-terra`, `store:false`); hasta 8 páginas, 30.000 caracteres y 60 respuestas por consulta. Muestra una propuesta editable, observaciones y tokens reales antes de aplicarla. Conserva los ejercicios fuera de la región elegida y permite recuperar el borrador anterior. No activa la corrección de entregas con IA. Requiere saldo de API.
+
+`node --experimental-strip-types scripts/check-ai-recognition.mjs` verifica el formato visual, opciones, reemplazo parcial, límites y privacidad con respuestas simuladas, sin consumir saldo.
