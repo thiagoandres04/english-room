@@ -1,20 +1,27 @@
 import {selectionMatches,formatAnswer} from './multi-choice.ts';
 import {withAnswerSizes} from './answer-size.ts';
 import type {ExamFigure} from './exam-figures.ts';
-export type ExamPart={text?:string;id?:string;answer?:string;rubric?:string;multiline?:boolean;blank?:boolean;kind?:'text'|'choice'|'multi-choice'|'wordbank'|'word-gap'|'figure';figure?:ExamFigure;prompt?:string;options?:string[];bankId?:string;bankMode?:'write';inline?:boolean;reusable?:boolean;selectCount?:number};
-export type ExerciseMark=ExamPart&{start:number;end:number;id:string};
+export type ExamPart={text?:string;id?:string;answer?:string;rubric?:string;multiline?:boolean;wide?:boolean;blank?:boolean;kind?:'text'|'choice'|'multi-choice'|'wordbank'|'word-gap'|'figure';figure?:ExamFigure;prompt?:string;options?:string[];bankId?:string;bankMode?:'write';inline?:boolean;reusable?:boolean;selectCount?:number;groupId?:string;groupStyle?:'matching'|'categories'};
+export type ExerciseMark=ExamPart&{start:number;end:number;id:string;section?:ExamPart[]};
 export function makeParts(text:string,marks:ExerciseMark[]):ExamPart[]{
  const parts:ExamPart[]=[];let position=0;
  for(const mark of [...marks].sort((a,b)=>a.start-b.start)){
   if(mark.start>position)parts.push({text:text.slice(position,mark.start)});
-  parts.push(mark.kind==='figure'?{id:mark.id,kind:'figure',figure:mark.figure}:mark.kind==='wordbank'?{id:mark.id,kind:'wordbank',options:mark.options,reusable:mark.reusable,...(mark.bankMode?{bankMode:mark.bankMode}:{})}:mark.kind==='word-gap'?{id:mark.id,kind:'word-gap',bankId:mark.bankId,options:mark.options,answer:mark.answer||''}:mark.kind==='choice'||mark.kind==='multi-choice'?{id:mark.id,kind:mark.kind,prompt:mark.prompt,options:mark.options,answer:mark.answer||'',...(mark.inline?{inline:true}:{}),...(mark.selectCount?{selectCount:mark.selectCount}:{})}:{id:mark.id,answer:text.slice(mark.start,mark.end),...(mark.multiline!==undefined?{multiline:mark.multiline}:{})});
+  if(mark.section){parts.push(...mark.section);position=mark.end;continue;}
+  parts.push(mark.kind==='figure'?{id:mark.id,kind:'figure',figure:mark.figure}:mark.kind==='wordbank'?{id:mark.id,kind:'wordbank',options:mark.options,reusable:mark.reusable,...(mark.bankMode?{bankMode:mark.bankMode}:{})}:mark.kind==='word-gap'?{id:mark.id,kind:'word-gap',bankId:mark.bankId,options:mark.options,answer:mark.answer||''}:mark.kind==='choice'||mark.kind==='multi-choice'?{id:mark.id,kind:mark.kind,prompt:mark.prompt,options:mark.options,answer:mark.answer||'',...(mark.inline?{inline:true}:{}),...(mark.groupId?{groupId:mark.groupId,groupStyle:mark.groupStyle}:{}),...(mark.selectCount?{selectCount:mark.selectCount}:{})}:{id:mark.id,answer:mark.blank?(mark.answer||''):text.slice(mark.start,mark.end),...(mark.wide?{wide:true}:{}),...(mark.multiline!==undefined?{multiline:mark.multiline}:{})});
   position=mark.end;
  }
  if(position<text.length)parts.push({text:text.slice(position)});
  return withAnswerSizes(parts);
 }
 export function choiceLabel(value:string){return value==='T'?'True':value==='F'?'False':value==='NI'?'No information':value;}
-export function toStudentParts(parts:ExamPart[]):ExamPart[]{return withAnswerSizes(parts).map(p=>p.kind==='figure'?{kind:p.kind,id:p.id,figure:p.figure}:p.kind==='wordbank'?{kind:p.kind,id:p.id,options:p.options,reusable:p.reusable,...(p.bankMode?{bankMode:p.bankMode}:{})}:p.answer!==undefined?{id:p.id,blank:true,...(p.multiline!==undefined?{multiline:p.multiline}:{}),...(p.kind==='choice'||p.kind==='multi-choice'?{kind:p.kind,prompt:p.prompt,options:p.options,...(p.inline?{inline:true}:{}),...(p.selectCount?{selectCount:p.selectCount}:{})}:p.kind==='word-gap'?{kind:p.kind,bankId:p.bankId,options:p.options}:{})}:{text:p.text});}
+export function toStudentParts(parts:ExamPart[]):ExamPart[]{return withAnswerSizes(parts).map(p=>p.kind==='figure'?{kind:p.kind,id:p.id,figure:p.figure}:p.kind==='wordbank'?{kind:p.kind,id:p.id,options:p.options,reusable:p.reusable,...(p.bankMode?{bankMode:p.bankMode}:{})}:p.answer!==undefined?{id:p.id,blank:true,...(p.wide?{wide:true}:{}),...(p.multiline!==undefined?{multiline:p.multiline}:{}),...(p.kind==='choice'||p.kind==='multi-choice'?{kind:p.kind,prompt:p.prompt,options:p.options,...(p.inline?{inline:true}:{}),...(p.groupId?{groupId:p.groupId,groupStyle:p.groupStyle}:{}),...(p.selectCount?{selectCount:p.selectCount}:{})}:p.kind==='word-gap'?{kind:p.kind,bankId:p.bankId,options:p.options}:{})}:{text:p.text});}
+export function choiceGroupsAreValid(parts:ExamPart[]){
+ const grouped=parts.filter(p=>p.groupId!==undefined||p.groupStyle!==undefined);
+ if(grouped.some(p=>p.kind!=='choice'||typeof p.groupId!=='string'||!p.groupId||p.groupId.length>100||!['matching','categories'].includes(p.groupStyle||'')))return false;
+ for(const id of new Set(grouped.map(p=>p.groupId))){const rows=grouped.filter(p=>p.groupId===id);if(rows.length<2||rows.length>40||rows.some(p=>p.groupStyle!==rows[0].groupStyle||JSON.stringify(p.options)!==JSON.stringify(rows[0].options)))return false;}
+ return true;
+}
 export const hasReference=(p:ExamPart)=>typeof p.answer==='string'&&!!p.answer.trim()&&!/^[\s_.…–—-]+$/.test(p.answer);
 export const missingReferences=(parts:ExamPart[])=>parts.some(p=>p.answer!==undefined&&!hasReference(p));
 export const MISSING_REFERENCE_MESSAGE='La entrega está guardada y queda pendiente de revisión docente porque el examen no tiene todas las soluciones de referencia.';

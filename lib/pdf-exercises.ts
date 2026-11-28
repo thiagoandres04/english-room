@@ -5,7 +5,8 @@ import {wordBankMarks,type WordBankHint} from './pdf-word-banks.ts';
 import {extractStyledChoices} from './pdf-choice-layout.ts';
 import type {ExamFigure} from './exam-figures.ts';
 import {repairedChoiceHints,repairedWordBanks,recoveredTypedKeys,isReadingTitle} from './pdf-hint-repair.ts';
-export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice'|'figure';start?:number;end?:number;figure?:ExamFigure;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
+import {structuredSections,blankFields} from './pdf-structured-exercises.ts';
+export type AnswerHint={line:string;answer:string;source:'circle'|'underline'|'bold'|'written'|'inline-choice'|'slash-options'|'figure';fragment?:string;occurrence?:number;start?:number;end?:number;figure?:ExamFigure;prompt?:string;options?:string[];kind?:'choice';inline?:boolean;multiline?:boolean};
 type TextRun=PositionedText&{fontName?:string};
 const normalize=(s:string)=>s.replace(/\s+/g,' ').trim();
 const instruction=/^\d{1,3}[.)]?\s+(?:Listen\b|Read the\b|Answer the\b|Choose\b|Match\b|Complete\b|Look at\b|Are the sentences\b|Do you agree\b|Write\b|Circle\b|Tick\b|Select\b)/i;
@@ -97,6 +98,7 @@ export function extractAnswerHints(items:TextRun[],operators:{fnArray:ArrayLike<
  }
  const styled=extractStyledChoices(items,fontNames);
  hints.push(...styled.boldMarks.map(h=>({...h,source:'bold' as const})),...styled.choices.map(h=>({...h,source:'inline-choice' as const,answer:''})));
+ hints.push(...styled.inlineGroups.map(h=>({...h,source:'slash-options' as const})));
  return hints;
 }
 function hintedAnswer(source:string,options:string[],hints:AnswerHint[]){
@@ -120,9 +122,21 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
  hints=repairedChoiceHints(hints);wordBanks=repairedWordBanks(text,wordBanks,hints);
  const lines:SourceLine[]=[];let offset=0;
  for(const line of text.split('\n')){lines.push({text:line,start:offset,end:offset+line.length});offset+=line.length+1;}
- const marks:ExerciseMark[]=[...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)&&!isReadingTitle(text,h.start!,h.end!)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))];
+ const sections=structuredSections(text);
+ const marks:ExerciseMark[]=[...sections,...detectTickExercises(text),...wordBankMarks(wordBanks),...hints.filter(h=>h.source==='written'&&Number.isInteger(h.start)&&Number.isInteger(h.end)&&!isReadingTitle(text,h.start!,h.end!)).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,...(h.multiline!==undefined?{multiline:h.multiline}:{}),...(h.kind==='choice'?{kind:h.kind,inline:h.inline,prompt:h.prompt,options:h.options,answer:h.answer}:{})}))].filter((m,i)=>i<sections.length||!sections.some(s=>s.start<m.end&&s.end>m.start));
  marks.push(...hints.filter(h=>h.source==='figure'&&h.figure&&Number.isInteger(h.start)&&h.start===h.end).map(h=>({id:crypto.randomUUID(),start:h.start!,end:h.end!,kind:'figure' as const,figure:h.figure})));
  marks.push(...recoveredTypedKeys(text,hints,marks));
+ for(const match of text.matchAll(/\(([^()\n]*\/[^()\n]*)\)\s*_{3,}/g)){
+  const options=match[1].split(/\s*\/\s*/).map(s=>s.trim()),start=match.index!,end=start+match[0].length;
+  if(options.length>=2&&options.length<=12&&options.every(o=>o&&o.length<100)&&!marks.some(m=>m.start<end&&m.end>start))marks.push({id:crypto.randomUUID(),start,end,kind:'choice',inline:true,prompt:'Elegí la opción correcta',options,answer:''});
+ }
+ for(const hint of hints.filter(h=>h.source==='slash-options'&&h.fragment&&h.options?.length&&!hints.some(other=>other.source==='inline-choice'&&normalize(other.line)===normalize(h.line)))){
+  const flexible=(value:string)=>new RegExp(value.trim().split(/\s+/).map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('\\s+'),'gu');
+  const containers=[...text.matchAll(flexible(hint.line))];if(containers.length!==1)continue;
+  const container=containers[0],matches=[...container[0].matchAll(flexible(hint.fragment!))],match=matches[hint.occurrence||0];if(!match)continue;
+  const start=container.index!+match.index!,end=start+match[0].length;
+  if(!marks.some(m=>m.start<end&&m.end>start))marks.push({id:crypto.randomUUID(),start,end,kind:'choice',inline:true,prompt:'Elegí la opción correcta',options:hint.options,answer:hint.answer});
+ }
  const addChoice=(lineIndex:number,endIndex:number,prompt:string,options:string[],answer?:string)=>{
   const start=lines[lineIndex].start,end=lines[endIndex].end;
   marks.push({id:crypto.randomUUID(),start,end,kind:'choice',prompt,options,answer:answer??hintedAnswer(text.slice(start,end),options,hints)});
@@ -182,6 +196,7 @@ export function detectExercises(text:string,hints:AnswerHint[]=[],wordBanks:Word
    i=end-1;
   }
  }
+ marks.push(...blankFields(text,marks,wordBanks));
  return marks.sort((a,b)=>a.start-b.start);
 }
 
@@ -197,6 +212,7 @@ export function mergeDetectedExercises(previous:ExerciseMark[],detected:Exercise
   const old=previous.find(m=>m.start===candidate.start&&m.kind===candidate.kind&&(m.end===candidate.end||m.kind==='choice'&&candidate.end>=m.end&&normalize(candidate.prompt||'').startsWith(normalize(m.prompt||''))));
   const result={...candidate};if(!old)return result;
   ids.set(candidate.id,old.id);result.id=old.id;
+  if(candidate.section&&old.section)result.section=candidate.section.map(part=>{const previous=old.section!.find(p=>p.kind===part.kind&&p.prompt===part.prompt&&p.answer!==undefined);return previous?{...part,id:previous.id,answer:previous.answer}:part;});
   if(old.answer){
    if(candidate.kind==='choice')result.answer=mappedOption(old.answer,candidate.options||[])??candidate.answer;
    else if(candidate.kind==='multi-choice'){

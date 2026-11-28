@@ -39,7 +39,7 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
   const y=item.transform[5];let row=rows.find(r=>Math.abs(r.y-y)<2.6);if(!row){row={y,items:[],text:''};rows.push(row)}row.items.push(item);
  }
  rows.forEach(r=>r.text=extractPageText(r.items));
- const choices:StyledChoice[]=[],boldMarks:{line:string;answer:string}[]=[];
+ const choices:StyledChoice[]=[],boldMarks:{line:string;answer:string}[]=[],inlineGroups:{line:string;fragment:string;options:string[];answer:string;occurrence:number}[]=[];
  for(let i=0;i<rows.length;i++){
   if(!/^(?:\d{1,3}[.)]?|[A-H][.)])\s/.test(rows[i].text))continue;
   let end=i+1;while(end<rows.length&&!/^(?:(?:\d{1,3}[.)]?|[A-H][.)])\s|Score\s*:|LISTENING\b|READING\b|WRITING\b|GRAMMAR\b|VOCABULARY\b)/i.test(rows[end].text))end++;
@@ -47,7 +47,7 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
   const line=extractPageText(block);
   const groups:Run[][]=[];let key='';
   for(const run of block){const next=style(run,fonts);if(next!==key){groups.push([]);key=next;}groups.at(-1)!.push(run);}
-  const candidates:StyledChoice[]=[];
+  const candidates:StyledChoice[]=[],fragments:{fragment:string;options:string[]}[]=[];
   for(const group of groups){
    // Plain body text can include T/F, answer synonyms, or sentence-building
    // clues. Only an emphasized span supplies reliable phrase boundaries.
@@ -61,13 +61,16 @@ export function extractStyledChoices(items:Run[],fonts:Record<string,string>={})
    const before=line.slice(0,match.index),after=punctuation+line.slice(match.index+match[0].length);
    const prompt=(before+(/[\p{L}\p{N}]$/u.test(before)?' ':'')+'____'+(/^[\p{L}\p{N}]/u.test(after)?' ':'')+after).replace(/\s+/g,' ').trim();
    candidates.push({line,prompt,options});
+   fragments.push({fragment:alternatives,options});
   }
   const boldStart=boldMarks.length;
   let ink:Run[]=[];
   const flush=()=>{if(!ink.length)return;for(const answer of extractPageText(ink).split(/\s*\/\s*/).map(t=>t.replace(/\s+/g,' ').trim().replace(/[.,;:!?]+$/,'')))if(/[\p{L}]/u.test(answer)&&answer.length<=3000)boldMarks.push({line,answer});ink=[];};
   for(const run of block){if(bold(fonts[run.fontName||'']||'')&&!/^\d{1,3}[.)]?$/.test(run.str.trim()))ink.push(run);else flush();}flush();
-  if(candidates.length===1)choices.push(candidates[0]);
+  const counts=new Map<string,number>();
+  for(const fragment of fragments){const keys=boldMarks.slice(boldStart).filter(h=>fragment.options.includes(h.answer));const occurrence=counts.get(fragment.fragment)||0;counts.set(fragment.fragment,occurrence+1);inlineGroups.push({line,...fragment,answer:keys.length===1?keys[0].answer:'',occurrence});}
+  if(candidates.length===1&&!/_{3,}/.test(line))choices.push(candidates[0]);
   else if(!candidates.length){const choice=plainSlashChoice(line,boldMarks.slice(boldStart).map(h=>h.answer));if(choice)choices.push(choice);}
  }
- return {choices,boldMarks};
+ return {choices,boldMarks,inlineGroups};
 }

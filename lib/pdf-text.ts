@@ -10,8 +10,10 @@ function joinRuns(runs:Run[]){
     // Ignore the synthetic whitespace items emitted by PDF.js. Their geometry is
     // sometimes oversized; actual glyph positions are the reliable separator.
     const gap=previous?run.x-(previous.x+previous.width):0;
-    const threshold=Math.max(.65,Math.min(run.height,previous?.height||run.height)*.12);
-    const needsSpace=previous&&gap>threshold&&!/^[,.;:!?%)\]}]/u.test(run.text)&&!/[([{]$/u.test(text);
+    const threshold=Math.max(.35,Math.min(run.height,previous?.height||run.height)*.06);
+    const numberedGap=/^\d{1,2}$/.test(run.text)&&/\p{L}$/u.test(text);
+    const contraction=gap<3&&(/^['’]$/.test(run.text)&&/\p{L}$/u.test(text)||/^['’]$/.test(previous?.text||'')&&/^(?:t|s|re|ve|ll|d|m)\b/.test(run.text));
+    const needsSpace=previous&&!contraction&&(gap>threshold||numberedGap)&&!/^[,.;:!?%)\]}]/u.test(run.text)&&!/[([{]$/u.test(text);
     text+=(needsSpace?' ':'')+run.text;
     previous=run;
   }

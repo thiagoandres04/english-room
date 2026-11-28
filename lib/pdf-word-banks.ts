@@ -3,7 +3,7 @@ import {stripPDFStudentHeader} from './pdf-student-header.ts';
 import type {ExerciseMark} from './exam-parts.ts';
 type Run=PositionedText&{fontName?:string};
 export type WordBankHint={start:number;end:number;options:string[];reusable:boolean;bankMode?:'write';gaps:{start:number;end:number;answer:string}[]};
-const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|verbs|adjectives|nouns|phrases|box|use to)|Read.*(?:words.*box|complete)|Match.*(?:words|adjectives).*(?:sentences|box))/i;
+const header=/^\d+[.)]?\s+(?:Listen.*complete|Complete.*(?:words|verbs|adjectives|nouns|phrases|expressions|box|use to)|Read.*(?:words.*box|complete)|Read and write\.?$|Match.*(?:words|adjectives).*(?:sentences|box))/i;
 const handwriting=/Dekko|Overlock|handwrit|Comic|Cursive|Script/i;
 const answerText=(value:string)=>value.trim().replace(/[.,;:!?]+$/,'');
 /** Preserve word-bank phrase boundaries and filled gap geometry before flattening the PDF. */
@@ -15,10 +15,10 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
  }
  rows.forEach(r=>r.text=extractPageText(r.items));
  const removed=new Set<Run>();const replacements=new Map<Run,string>();const virtual:Run[]=[];
- const tokens:{token:string;value:string;bank:number;gap:boolean;choice?:{prompt:string;options:string[];answer:string}}[]=[];
+ const tokens:{token:string;value:string;bank:number;gap:boolean;answer?:string;choice?:{prompt:string;options:string[];answer:string}}[]=[];
  const written:{start:number;end:number;choice?:{prompt:string;options:string[];answer:string}}[]=[];
  const banks:WordBankHint[]=[];
- function token(value:string,bank:number,gap:boolean,choice?:{prompt:string;options:string[];answer:string}){const t='\uE000'+tokens.length+'\uE001';tokens.push({token:t,value,bank,gap,choice});return t;}
+ function token(value:string,bank:number,gap:boolean,choice?:{prompt:string;options:string[];answer:string},answer?:string){const t='\uE000'+tokens.length+'\uE001';tokens.push({token:t,value,bank,gap,choice,answer});return t;}
  for(let i=0;i<rows.length;i++){
   const row=rows[i];if(!header.test(row.text))continue;
   let last=i+1;while(last<rows.length&&!/^Score:|^\d+[.)]?\s+(?:Listen|Read|Write|Complete|Choose)/i.test(rows[last].text))last++;
@@ -31,16 +31,23 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
    }
    if(!bankRows.length)continue;
   }
-  const options:string[]=[];
+  const options:string[]=[];const bankCells:{value:string;x:number;right:number;y:number;height:number}[][]=[];
   for(const r of bankRows){
-   const runs=[...r.items].sort((a,b)=>a.transform[4]-b.transform[4]);let phrase='';let previous:Run|undefined;
+   const cells:typeof bankCells[number]=[];const runs=[...r.items].sort((a,b)=>a.transform[4]-b.transform[4]);let phrase='';let previous:Run|undefined;let left=0,right=0;
+   const flush=()=>{if(phrase)cells.push({value:phrase.trim(),x:left,right,y:r.y,height:r.items[0].height});phrase='';};
    for(const run of runs){const gap=previous?run.transform[4]-previous.transform[4]-previous.width:Infinity;
     // A double-space column gap is smaller than a whole letter's height.
     // Keep normal spaces inside phrases, but separate adjacent bank entries.
-    if(gap>Math.max(5,run.height*.5)&&phrase){options.push(phrase.trim());phrase=''}
-    phrase+=(phrase?' ':'')+run.str.trim();previous=run;
-   }if(phrase)options.push(phrase.trim());
+    if(gap>Math.max(5,run.height*.5)&&phrase)flush();
+    if(!phrase)left=run.transform[4];right=run.transform[4]+run.width;phrase+=(phrase?' ':'')+run.str.trim();previous=run;
+   }flush();bankCells.push(cells);
   }
+  const base=[...bankCells].sort((a,b)=>b.length-a.length)[0];
+  if(base&&bankCells.length>1&&base.length>=3){
+   const columns=base.map(c=>[c]);let aligned=true;
+   for(const cells of bankCells.filter(c=>c!==base))for(const cell of cells){const distances=base.map(b=>Math.min(Math.abs((cell.x+cell.right-b.x-b.right)/2),Math.abs(cell.x-b.x)));const index=distances.indexOf(Math.min(...distances));if(distances[index]>Math.max(12,cell.height*2.5)){aligned=false;break;}columns[index].push(cell);}
+   if(aligned)options.push(...columns.map(c=>c.sort((a,b)=>b.y-a.y).map(v=>v.value).join(' ')));else options.push(...bankCells.flatMap(c=>c.map(v=>v.value)));
+  }else options.push(...bankCells.flatMap(c=>c.map(v=>v.value)));
   if(grammar)options.push('used to','use to',"didn't use to",'did','Did','did you use to');
   if(options.length<2||options.length>40||new Set(options).size!==options.length)continue;
   const changeForm=/\b(?:correct|appropriate)\s+(?:[a-z]+\s+){0,3}form\b|change.*form/i.test(row.text)&&!grammar;
@@ -52,6 +59,7 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
   for(let n=i+1;n<last;n++){
    const r=rows[n];if(r.y>=bankBottom)continue;
    for(const run of r.items){
+    if(!changeForm&&/^_{3,}$/.test(run.str.trim())){replacements.set(run,token(run.str.trim(),bankIndex,true,undefined,''));continue;}
     const answerStyle=handwriting.test(fonts[run.fontName||'']||'')||/bold/i.test(fonts[run.fontName||'']||'')&&/^[\p{Lu}\s’'-]{2,}$/u.test(answerText(run.str));
     if(changeForm||!answerStyle||!run.str.trim())continue;
     const answer=options.find(o=>o.toLowerCase()===answerText(run.str).toLowerCase());if(!answer)continue;
@@ -73,16 +81,17 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
   if(options.some(o=>!o)||new Set(options).size!==options.length)continue;
   let first=r-1;while(first>=0&&!/^Score:|^\d+[.)]?\s+(?:Choose|Select|Complete|Read|Listen|Write)/i.test(rows[first].text))first--;
   // Other rows of the same options table are not section boundaries.
-  if(first<0||!/^\d+[.)]?\s+(?:Choose|Select).*\b(?:text|dialogue|passage)\b/i.test(rows[first].text))continue;
+  if(first<0||!/^\d+[.)]?\s+(?:Choose|Select).*(?:\b(?:text|dialogue|passage)\b|correct option)/i.test(rows[first].text))continue;
   const number=runs[0].str.replace(/[.)]/g,'').trim();const candidates:Run[]=[];
   for(let n=first+1;n<r;n++){
    const body=[...rows[n].items].sort((a,b)=>a.transform[4]-b.transform[4]);
-   body.forEach((run,j)=>{if(!handwriting.test(fonts[run.fontName||'']||'')||!run.str.trim())return;const before=body.slice(0,j).filter(t=>t.str.trim()).at(-1);if(/(?:^|[^\d])(\d{1,3})[.)]?\s*$/.exec(before?.str||'')?.[1]===number)candidates.push(run);});
+   body.forEach((run,j)=>{if((!handwriting.test(fonts[run.fontName||'']||'')&&!/^_{3,}$/.test(run.str.trim()))||!run.str.trim())return;const before=body.slice(0,j).filter(t=>t.str.trim()).at(-1);if(/(?:^|[^\d])(\d{1,3})[.)]?\s*$/.exec(before?.str||'')?.[1]===number)candidates.push(run);});
   }
   if(candidates.length!==1)continue;const run=candidates[0];
   inlineChoices.set(run,{prompt:'Casillero '+number,options,answer:options.find(o=>o.toLowerCase()===run.str.trim().toLowerCase())||''});
   row.items.forEach(item=>removed.add(item));
  }
+ for(const [run,choice] of inlineChoices)if(/^_{3,}$/.test(run.str.trim()))replacements.set(run,token(run.str.trim(),-1,true,choice));
  // Reunite wrapped ends of letter chains in their original column. Their
  // letters remain a puzzle; answer words are never substituted into the clue.
  for(let r=0;r<rows.length;r++){
@@ -106,7 +115,7 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
   const fullLine=sorted.every(i=>ink.includes(i)||!/[\p{L}\p{N}]/u.test(i.str))&&ink.every((run,i)=>!i||run.transform[4]-ink[i-1].transform[4]-ink[i-1].width<=Math.max(7,run.height));
   const groups:Run[][]=[];
   if(fullLine)groups.push(sorted);else for(const run of ink){const previous=groups.at(-1)?.at(-1);const between=previous&&sorted.slice(sorted.indexOf(previous)+1,sorted.indexOf(run));if(!previous||run.transform[4]-previous.transform[4]-previous.width>Math.max(7,run.height)||between?.some(i=>/[\p{L}\p{N}]/u.test(i.str)))groups.push([]);groups.at(-1)!.push(run);}
-  for(const group of groups){const first=group[0],value=extractPageText(group),choice=inlineChoices.get(first);group.forEach(i=>removed.add(i));removed.delete(first);replacements.set(first,token(value,-1,true,choice?{...choice,answer:choice.options.find(o=>o.toLowerCase()===value.toLowerCase())||''}:undefined));}
+  for(const group of groups){const content=sorted.slice(sorted.indexOf(group[0]),sorted.indexOf(group.at(-1)!)+1);const first=content[0],value=extractPageText(content),choice=inlineChoices.get(first);content.forEach(i=>removed.add(i));removed.delete(first);replacements.set(first,token(value,-1,true,choice?{...choice,answer:choice.options.find(o=>o.toLowerCase()===value.toLowerCase())||''}:undefined));}
  }
  let text=extractPageText([...items.filter(i=>!removed.has(i)).map(i=>replacements.has(i)?{...i,str:replacements.get(i)!}:i),...virtual]);
  // Typed answer keys often use uppercase bold inside ordinary body text.
@@ -127,7 +136,7 @@ export function extractWordBankPage(items:Run[],fonts:Record<string,string>={},a
  // Replace markers in output order so all offsets refer to the final readable text.
  const seen=[...text.matchAll(/\uE000(\d+)\uE001/g)];let shift=0;
  for(const m of seen){const t=tokens[Number(m[1])];const start=m.index!+shift;text=text.slice(0,start)+t.value+text.slice(start+m[0].length);shift+=t.value.length-m[0].length;
-  if(t.bank===-1)written.push({start,end:start+t.value.length,choice:t.choice});else if(t.gap)banks[t.bank].gaps.push({start,end:start+t.value.length,answer:t.value});else{banks[t.bank].start=start;banks[t.bank].end=start+t.value.length;}
+  if(t.bank===-1)written.push({start,end:start+t.value.length,choice:t.choice});else if(t.gap)banks[t.bank].gaps.push({start,end:start+t.value.length,answer:t.answer??t.value});else{banks[t.bank].start=start;banks[t.bank].end=start+t.value.length;}
  }
  const writtenAnswers:ExerciseMark[]=[];
  for(const {choice,...span} of written){const previous=writtenAnswers.at(-1),between=previous?text.slice(previous.end,span.start):'';if(!choice&&previous&&!previous.kind&&/\n/.test(between)&&/^\s*$/.test(between)){previous.end=span.end;previous.multiline=true;}else writtenAnswers.push({...span,id:crypto.randomUUID(),...(choice?{...choice,kind:'choice' as const,inline:true}:{})});}
